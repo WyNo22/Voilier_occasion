@@ -1,0 +1,84 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Boat {
+  id             String   @id @default(cuid())
+  externalId     String
+  source         String
+  url            String
+  title          String
+  price          Int?
+  currency       String   @default("EUR")
+  year           Int?
+  lengthM        Float?
+  lengthFt       Float?
+  beam           Float?
+  draft          Float?
+  displacement   Float?
+  sailArea       Float?
+  engineBrand    String?
+  engineHours    Int?
+  enginePower    Int?
+  cabins         Int?
+  berths         Int?
+  location       String?
+  latitude       Float?
+  longitude      Float?
+  description    String?  @db.Text
+  photos         String[]
+  brand          String?
+  model          String?
+  hull           String?
+
+  // AI extracted data
+  equipment      Json?
+  aiSummary      String?  @db.Text
+  condition      String?
+
+  // Scoring
+  relevanceScore  Int?
+  liveaboardScore Int?
+  cruisingScore   Int?
+  blueWaterScore  Int?
+
+  // Metadata
+  scrapedAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  priceHistory PriceHistory[]
+
+  @@unique([source, externalId])
+  @@index([price])
+  @@index([lengthM])
+  @@index([year])
+  @@index([location])
+  @@index([source])
+  @@index([brand, model])
+}
+
+model PriceHistory {
+  id     String   @id @default(cuid())
+  boatId String
+  price  Int
+  date   DateTime @default(now())
+  boat   Boat     @relation(fields: [boatId], references: [id], onDelete: Cascade)
+
+  @@index([boatId])
+  @@index([date])
+}
+
+model SearchSession {
+  id          String   @id @default(cuid())
+  query       String
+  parsedQuery Json?
+  resultCount Int      @default(0)
+  userIp      String?
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+}

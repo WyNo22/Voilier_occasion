@@ -1,0 +1,182 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap");
+
+@layer base {
+  :root {
+    --background: 222 47% 8%;
+    --foreground: 210 40% 98%;
+    --card: 222 40% 10%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222 40% 10%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 194 100% 42%;
+    --primary-foreground: 222 47% 8%;
+    --secondary: 222 35% 18%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 222 35% 15%;
+    --muted-foreground: 215 20% 60%;
+    --accent: 30 90% 67%;
+    --accent-foreground: 222 47% 8%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 222 30% 18%;
+    --input: 222 30% 18%;
+    --ring: 194 100% 42%;
+    --radius: 0.75rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+    background-color: #0a1628;
+    color: #f0f4f8;
+  }
+}
+
+@layer components {
+  .glass-card {
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.07) 0%,
+      rgba(255, 255, 255, 0.03) 100%
+    );
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .glass-card-hover {
+    @apply glass-card transition-all duration-300;
+  }
+
+  .glass-card-hover:hover {
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.1) 0%,
+      rgba(255, 255, 255, 0.05) 100%
+    );
+    border-color: rgba(0, 180, 216, 0.4);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(0, 180, 216, 0.15);
+  }
+
+  .score-excellent {
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+  }
+
+  .score-good {
+    background: linear-gradient(135deg, #84cc16, #65a30d);
+  }
+
+  .score-average {
+    background: linear-gradient(135deg, #eab308, #ca8a04);
+  }
+
+  .score-poor {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+  }
+
+  .ocean-gradient {
+    background: linear-gradient(
+      135deg,
+      #0a1628 0%,
+      #0d2040 25%,
+      #0a3555 50%,
+      #064663 75%,
+      #0a1628 100%
+    );
+    background-size: 400% 400%;
+  }
+
+  .text-gradient {
+    background: linear-gradient(135deg, #00b4d8 0%, #90e0ef 50%, #f4a261 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .btn-primary {
+    @apply bg-teal-500 hover:bg-teal-600 text-navy-900 font-semibold px-6 py-3 rounded-xl transition-all duration-200;
+    box-shadow: 0 4px 14px rgba(0, 180, 216, 0.4);
+  }
+
+  .btn-primary:hover {
+    box-shadow: 0 6px 20px rgba(0, 180, 216, 0.6);
+    transform: translateY(-1px);
+  }
+
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.05) 25%,
+      rgba(255, 255, 255, 0.1) 50%,
+      rgba(255, 255, 255, 0.05) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 2s infinite;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0a1628;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 180, 216, 0.4);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 180, 216, 0.7);
+}
+
+/* Animations */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes wave-bg {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animate-wave-bg {
+  animation: wave-bg 15s ease infinite;
+}
