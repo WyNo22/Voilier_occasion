@@ -58,7 +58,21 @@ export interface BoatListing {
   liveaboardScore?: number
   cruisingScore?: number
   blueWaterScore?: number
+  /** Justification synthétique de l'adéquation (issue du moteur de scoring). */
+  scoreSummary?: string
+  /** Détail explicable des facteurs de score. */
+  scoreFactors?: ScoreFactorDTO[]
+  /** Sources où l'annonce a été trouvée (après déduplication). */
+  sources?: string[]
   scrapedAt?: Date
+}
+
+export interface ScoreFactorDTO {
+  key: string
+  label: string
+  score: number
+  weight: number
+  reason: string
 }
 
 export interface SearchQuery {

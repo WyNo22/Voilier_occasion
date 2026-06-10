@@ -7,6 +7,10 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ---------------------------------------------------------------------------
+// Annonces canoniques
+// ---------------------------------------------------------------------------
+
 model Boat {
   id             String   @id @default(cuid())
   externalId     String
@@ -36,21 +40,31 @@ model Boat {
   model          String?
   hull           String?
 
-  // AI extracted data
+  // Données extraites par IA
   equipment      Json?
   aiSummary      String?  @db.Text
   condition      String?
 
-  // Scoring
-  relevanceScore  Int?
+  // Scoring intrinsèque (indépendant d'une recherche)
   liveaboardScore Int?
-  cruisingScore   Int?
+  coastalScore    Int?
   blueWaterScore  Int?
 
-  // Metadata
+  // Déduplication
+  dedupKey     String?  // clé de fusion (specs)
+  mergedFrom   String[] // ids/urls de doublons fusionnés
+
+  // Cycle de vie (pour la veille : détection des suppressions)
+  status       BoatStatus @default(ACTIVE)
+  firstSeenAt  DateTime   @default(now())
+  lastSeenAt   DateTime   @default(now())
+
+  // Métadonnées
   scrapedAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
   priceHistory PriceHistory[]
+  matches      MissionMatch[]
+  alerts       Alert[]
 
   @@unique([source, externalId])
   @@index([price])
@@ -59,6 +73,14 @@ model Boat {
   @@index([location])
   @@index([source])
   @@index([brand, model])
+  @@index([dedupKey])
+  @@index([status])
+}
+
+enum BoatStatus {
+  ACTIVE
+  PRICE_DROPPED
+  REMOVED
 }
 
 model PriceHistory {
@@ -71,6 +93,152 @@ model PriceHistory {
   @@index([boatId])
   @@index([date])
 }
+
+// ---------------------------------------------------------------------------
+// Utilisateurs & mémoire / profil évolutif
+// ---------------------------------------------------------------------------
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Canaux de notification
+  telegramChatId String?
+  discordWebhook String?
+  pushSubscription Json?
+  digestEnabled    Boolean @default(true)
+
+  // Mémoire / profil évolutif : pondérations apprises (marques favorites, etc.)
+  preferences Json?
+
+  missions Mission[]
+  alerts   Alert[]
+
+  @@index([email])
+}
+
+// ---------------------------------------------------------------------------
+// Agent de veille : missions
+// ---------------------------------------------------------------------------
+
+model Mission {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name      String
+  prompt    String   @db.Text         // demande en langage naturel
+  filters   Json                       // SearchQuery structuré
+
+  // Surveillance
+  frequency MissionFrequency @default(DAILY)
+  channels  String[]                   // ["email","telegram","discord","push"]
+  active    Boolean          @default(true)
+  lastRunAt DateTime?
+  nextRunAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  runs    MissionRun[]
+  matches MissionMatch[]
+  alerts  Alert[]
+
+  @@index([userId])
+  @@index([active, nextRunAt])
+}
+
+enum MissionFrequency {
+  HOURLY
+  EVERY_6H
+  DAILY
+  WEEKLY
+}
+
+model MissionRun {
+  id         String   @id @default(cuid())
+  missionId  String
+  mission    Mission  @relation(fields: [missionId], references: [id], onDelete: Cascade)
+
+  startedAt  DateTime @default(now())
+  finishedAt DateTime?
+  analyzed   Int      @default(0) // annonces vues
+  newCount   Int      @default(0)
+  updatedCount Int    @default(0)
+  removedCount Int    @default(0)
+  durationMs Int?
+  error      String?
+
+  @@index([missionId])
+  @@index([startedAt])
+}
+
+// Lien Mission <-> Boat avec scores et justification.
+model MissionMatch {
+  id         String   @id @default(cuid())
+  missionId  String
+  mission    Mission  @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  boatId     String
+  boat       Boat     @relation(fields: [boatId], references: [id], onDelete: Cascade)
+
+  matchScore   Int               // adéquation 0-100
+  factors      Json?             // facteurs explicables
+  summary      String?  @db.Text // recommandation IA
+  notified     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([missionId, boatId])
+  @@index([missionId, matchScore])
+}
+
+// ---------------------------------------------------------------------------
+// Alertes
+// ---------------------------------------------------------------------------
+
+model Alert {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  missionId String
+  mission   Mission  @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  boatId    String?
+  boat      Boat?    @relation(fields: [boatId], references: [id], onDelete: SetNull)
+
+  type      String        // nouvelle_annonce | baisse_prix | sous_cotee | excellent_score | rare
+  priority  AlertPriority
+  message   String        @db.Text
+  meta      Json?
+
+  status    AlertStatus @default(PENDING)
+  channel   String?     // canal d'envoi effectif
+  sentAt    DateTime?
+  createdAt DateTime    @default(now())
+
+  @@index([userId, status])
+  @@index([missionId])
+  @@index([priority, status])
+}
+
+enum AlertPriority {
+  CRITIQUE
+  IMPORTANT
+  FAIBLE
+}
+
+enum AlertStatus {
+  PENDING      // en attente d'envoi (ou de regroupement dans le digest)
+  SENT
+  DIGESTED
+  FAILED
+}
+
+// ---------------------------------------------------------------------------
+// Analytics
+// ---------------------------------------------------------------------------
 
 model SearchSession {
   id          String   @id @default(cuid())

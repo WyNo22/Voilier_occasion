@@ -7,11 +7,12 @@
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "type-check": "turbo run type-check",
+    "test": "turbo run test",
     "clean": "turbo run clean",
-    "db:generate": "pnpm --filter @voilierscope/database prisma generate",
-    "db:push": "pnpm --filter @voilierscope/database prisma db push",
-    "db:migrate": "pnpm --filter @voilierscope/database prisma migrate dev",
-    "db:studio": "pnpm --filter @voilierscope/database prisma studio"
+    "db:generate": "pnpm --filter @voilierscope/database run db:generate",
+    "db:push": "pnpm --filter @voilierscope/database run db:push",
+    "db:migrate": "pnpm --filter @voilierscope/database run db:migrate",
+    "db:studio": "pnpm --filter @voilierscope/database run db:studio"
   },
   "devDependencies": {
     "turbo": "^2.3.3",

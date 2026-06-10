@@ -1,7 +1,13 @@
 import { NextRequest } from "next/server"
 import { parseSearchQuery } from "@/lib/ai/parseSearch"
-import { scoreBoat } from "@/lib/ai/scoreBoat"
 import { getAllScrapers } from "@voilierscope/scrapers"
+import {
+  explainScore,
+  blueWaterScore,
+  liveaboardScore,
+  coastalScore,
+  dedupeListings,
+} from "@voilierscope/core"
 import type { SearchProgress, BoatListing } from "@voilierscope/types"
 
 export const dynamic = "force-dynamic"
@@ -62,12 +68,17 @@ export async function GET(request: NextRequest) {
           try {
             const result = await scraper.search(parsedQuery)
 
-            // Score each listing
+            // Score each listing with the explainable engine + use-case scores
             const scoredListings = result.listings.map((listing) => {
-              const scores = scoreBoat(listing, parsedQuery)
+              const explained = explainScore(listing, parsedQuery)
               return {
                 ...listing,
-                relevanceScore: listing.relevanceScore ?? scores.total,
+                relevanceScore: explained.total,
+                scoreSummary: explained.summary,
+                scoreFactors: explained.factors,
+                blueWaterScore: blueWaterScore(listing),
+                liveaboardScore: liveaboardScore(listing),
+                cruisingScore: coastalScore(listing),
               }
             })
 
@@ -97,16 +108,17 @@ export async function GET(request: NextRequest) {
 
         await Promise.all(scraperPromises)
 
-        // Step 3: Sort and send complete
-        const sortedListings = allListings.sort((a, b) =>
+        // Step 3: Deduplicate across platforms, sort, and send complete
+        const deduped = dedupeListings(allListings)
+        const sortedListings = deduped.sort((a, b) =>
           (b.relevanceScore || 0) - (a.relevanceScore || 0)
         )
 
         send({
           type: "complete",
-          total: totalFound,
+          total: sortedListings.length,
           listings: sortedListings,
-          message: `${totalFound} annonces trouvées`,
+          message: `${sortedListings.length} annonces uniques (${totalFound} trouvées)`,
         })
 
         controller.close()
