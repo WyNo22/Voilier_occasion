@@ -68,16 +68,18 @@ export const REAL_SOURCE_CONFIGS: JsonLdConnectorConfig[] = [
     id: "boat24",
     displayName: "Boat24",
     baseUrl: "https://www.boat24.com",
-    // Découverte : liens /detail/<id> sur les pages de résultats par catégorie.
+    // Découverte : la VRAIE page de résultats est /fr/bateauxdoccasion/?cat=N
+    // (et non /fr/voiliers/ qui renvoie 403). cat=1 = voiliers.
     buildSearchUrls: (query) => {
-      if (query.category === "bateau_moteur") return ["https://www.boat24.com/fr/bateaux-a-moteur/"]
-      return ["https://www.boat24.com/fr/voiliers/"]
+      const cat = query.category === "bateau_moteur" ? 2 : 1
+      return [`https://www.boat24.com/fr/bateauxdoccasion/?cat=${cat}`]
     },
     listingLinkSelector: 'a[href*="/detail/"]',
     listingUrlPattern: /\/detail\/\d+\/?$/,
     externalIdFromUrl: (url) => url.match(/\/detail\/(\d+)/)?.[1] ?? url,
     category: "voilier",
-    maxListings: 30,
+    // Pagination ?page=N (s'ajoute à ?cat=N). Profondeur via SCRAPER_MAX_PAGES.
+    pagination: { maxPages: 1 },
     // Longueur/largeur ne sont pas en JSON-LD chez boat24 : on les lit dans la
     // description (« Longueur : 14,99m, Largeur 7,98m »).
     customExtract: (html) => {
@@ -87,7 +89,8 @@ export const REAL_SOURCE_CONFIGS: JsonLdConnectorConfig[] = [
     },
   },
   {
-    // ✅ Calibré (JSON-LD schema.org/Vehicle, fiches accessibles via navigateur).
+    // ✅ Calibré (JSON-LD schema.org/Vehicle, fiches via navigateur).
+    // Pagination confirmée : ?page=N (format par défaut).
     id: "bandofboats",
     displayName: "Band of Boats",
     baseUrl: "https://www.bandofboats.com",
@@ -100,25 +103,12 @@ export const REAL_SOURCE_CONFIGS: JsonLdConnectorConfig[] = [
     listingUrlPattern: /\/bateaux-a-vendre\/\d+$/,
     externalIdFromUrl: (url) => url.match(/\/bateaux-a-vendre\/(\d+)/)?.[1] ?? url,
     category: "voilier",
-    maxListings: 30,
+    pagination: { maxPages: 1 }, // profondeur via SCRAPER_MAX_PAGES // ?page=N ✅
     customExtract: (html) => bandofboatsExtract(html),
   },
-  {
-    id: "youboat",
-    displayName: "Youboat",
-    baseUrl: "https://www.youboat.fr",
-    sitemapUrl: "https://www.youboat.fr/sitemap.xml",
-    listingUrlPattern: /\/(annonce|bateau|voilier)/i,
-    maxListings: 30,
-  },
-  {
-    id: "inautia",
-    displayName: "iNautia",
-    baseUrl: "https://www.inautia.com",
-    sitemapUrl: "https://www.inautia.com/sitemap.xml",
-    listingUrlPattern: /\/(occasion|boat|barco|bateau)/i,
-    maxListings: 30,
-  },
+  // youboat & inautia : parqués. youboat = fiches en 403 (anti-bot) + pas de
+  // JSON-LD listing sur la page de résultats. À traiter via transport dédié ou
+  // extraction des cartes de résultats. inautia : à calibrer.
 ]
 
 /** Instancie les connecteurs HTML réels à partir des configurations. */
