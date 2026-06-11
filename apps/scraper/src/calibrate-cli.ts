@@ -2,6 +2,8 @@ import {
   fetchTextWithRetry,
   findSitemapsViaRobots,
   diagnoseHtml,
+  extractRawJsonLd,
+  extractLinks,
 } from "@voilierscope/scrapers"
 import { createBrowserContext } from "./browser"
 
@@ -21,6 +23,8 @@ async function main() {
   const args = process.argv.slice(2)
   const sitemapsMode = args.includes("--sitemaps")
   const useBrowser = args.includes("--browser")
+  const dumpMode = args.includes("--dump")
+  const linksMode = args.includes("--links")
   const url = args.find((a) => a.startsWith("http"))
 
   if (!url) {
@@ -80,6 +84,33 @@ async function main() {
     return
   } finally {
     if (closeBrowser) await closeBrowser()
+  }
+
+  // Mode --dump : affiche le JSON-LD brut (pour mapper les champs manquants).
+  if (dumpMode) {
+    const blocks = extractRawJsonLd(html)
+    console.log(`📦 ${blocks.length} bloc(s) JSON-LD brut(s) :\n`)
+    blocks.forEach((b, i) => {
+      console.log(`----- bloc ${i + 1} -----`)
+      try {
+        console.log(JSON.stringify(JSON.parse(b), null, 2))
+      } catch {
+        console.log(b)
+      }
+    })
+    return
+  }
+
+  // Mode --links : liste les URLs d'annonces (pour calibrer la découverte).
+  if (linksMode) {
+    const links = extractLinks(html, url, /\/detail\/\d+/i)
+    console.log(`🔗 ${links.length} lien(s) d'annonce (motif /detail/<id>) :\n`)
+    links.slice(0, 25).forEach((l) => console.log(`  ${l}`))
+    if (links.length === 0) {
+      console.log("Aucun lien /detail/ trouvé sur cette page. Colle-moi l'URL d'une page")
+      console.log("de résultats de recherche du site et je règle le sélecteur de découverte.")
+    }
+    return
   }
 
   const d = diagnoseHtml(html)

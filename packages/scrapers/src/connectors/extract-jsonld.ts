@@ -123,6 +123,35 @@ export interface ExtractResult extends Partial<RawListingInput> {
   found: boolean
 }
 
+/** Retourne le contenu brut des blocs JSON-LD (pour calibration). */
+export function extractRawJsonLd(html: string): string[] {
+  const $ = cheerio.load(html)
+  const blocks: string[] = []
+  $('script[type="application/ld+json"]').each((_, el) => {
+    const raw = $(el).contents().text().trim()
+    if (raw) blocks.push(raw)
+  })
+  return blocks
+}
+
+/** Liste les liens internes correspondant à un motif (découverte d'annonces). */
+export function extractLinks(html: string, baseUrl: string, pattern: RegExp): string[] {
+  const $ = cheerio.load(html)
+  const urls = new Set<string>()
+  $("a[href]").each((_, el) => {
+    const href = $(el).attr("href")
+    if (!href) return
+    let abs: string
+    try {
+      abs = new URL(href, baseUrl).toString()
+    } catch {
+      return
+    }
+    if (pattern.test(abs)) urls.add(abs)
+  })
+  return Array.from(urls)
+}
+
 /** Rapport de diagnostic d'une page, pour calibrer un connecteur. */
 export interface PageDiagnosis {
   jsonLdBlocks: number
