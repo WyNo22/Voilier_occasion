@@ -15,6 +15,7 @@ model Boat {
   id             String   @id @default(cuid())
   externalId     String
   source         String
+  category       String   @default("voilier")
   url            String
   title          String
   price          Int?
@@ -75,6 +76,7 @@ model Boat {
   @@index([brand, model])
   @@index([dedupKey])
   @@index([status])
+  @@index([category])
 }
 
 enum BoatStatus {

@@ -16,6 +16,7 @@ export function isDbConfigured(): boolean {
 interface BoatRow {
   id: string
   source: string
+  category: string
   externalId: string
   url: string
   title: string
@@ -43,6 +44,7 @@ function rowToListing(row: BoatRow): BoatListing {
   return {
     id: row.id,
     source: row.source,
+    category: row.category as BoatListing["category"],
     title: row.title,
     price: row.price ?? undefined,
     currency: row.currency,
@@ -95,6 +97,7 @@ export async function searchBoatsInDb(query: SearchQuery, limit = 100): Promise<
         ...(query.maxYear ? { lte: query.maxYear } : {}),
       }
     }
+    if (query.category) where.category = query.category
     if (query.hullType) where.hull = query.hullType
     if (query.brand) where.brand = { contains: query.brand, mode: "insensitive" }
 

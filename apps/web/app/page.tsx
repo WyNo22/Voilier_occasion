@@ -4,6 +4,8 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import { Search, Anchor, BarChart3, Zap, Globe, Star, ChevronRight, Waves, Ship, MapPin, TrendingUp } from "lucide-react"
+import { CategoryBrowser } from "@/components/CategoryBrowser"
+import { VEHICLE_CATEGORIES, type VehicleCategory } from "@voilierscope/types"
 
 const PLACEHOLDER_EXAMPLES = [
   "Voilier 10m Méditerranée budget 45k€",
@@ -83,6 +85,13 @@ export default function HomePage() {
     if (!searchQuery.trim()) return
     setIsSubmitting(true)
     router.push(`/search?q=${encodeURIComponent(searchQuery.trim())}`)
+  }
+
+  const handleCategory = (category: VehicleCategory) => {
+    const meta = VEHICLE_CATEGORIES.find((c) => c.id === category)
+    const label = meta?.label ?? category
+    setIsSubmitting(true)
+    router.push(`/search?q=${encodeURIComponent(label)}&category=${category}`)
   }
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -251,6 +260,19 @@ export default function HomePage() {
                 </motion.button>
               </div>
             </motion.form>
+
+            {/* Category browser (Boat24-inspired DA, original visuals) */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+              className="max-w-3xl mx-auto mb-8"
+            >
+              <p className="text-white/40 text-xs uppercase tracking-widest mb-3 text-left">
+                Parcourir par catégorie
+              </p>
+              <CategoryBrowser onSelect={handleCategory} />
+            </motion.div>
 
             {/* Example chips */}
             <motion.div

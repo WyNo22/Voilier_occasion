@@ -1,4 +1,4 @@
-import type { BoatListing } from "@voilierscope/types"
+import type { BoatListing, VehicleCategory } from "@voilierscope/types"
 import { feetToMeters, metersToFeet, toEur } from "./units"
 
 /**
@@ -9,6 +9,7 @@ import { feetToMeters, metersToFeet, toEur } from "./units"
 export interface RawListingInput {
   source: string
   externalId: string
+  category?: VehicleCategory
   url: string
   title?: string
   price?: number
@@ -93,6 +94,7 @@ export function normalizeListing(
   return {
     id: `${raw.source}-${raw.externalId}`,
     source: raw.source,
+    category: raw.category ?? "voilier",
     title: cleanText(raw.title) || "Voilier sans titre",
     price,
     currency: "EUR",

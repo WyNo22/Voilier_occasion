@@ -8,6 +8,7 @@ const client = new Anthropic({
 const SYSTEM_PROMPT = `You are a French sailboat search query parser. Extract structured search parameters from natural language queries about used sailboats.
 
 Parse the user's query and return a JSON object with these optional fields:
+- category: one of "voilier" | "bateau_moteur" | "pneumatique" | "petit_bateau" | "moteur" | "remorque" | "jet_ski" | "peniche" (the type of marine vehicle)
 - minPrice: number (minimum price in EUR)
 - maxPrice: number (maximum price in EUR)
 - minLength: number (minimum length in meters)
@@ -102,6 +103,21 @@ function parseQueryFallback(raw: string): SearchQuery {
     const len = parseFloat(lengthMatch[1])
     query.minLength = len - 1
     query.maxLength = len + 1
+  }
+
+  // Vehicle category
+  if (lower.includes("pneumatique") || lower.includes("semi-rigide") || lower.includes("annexe")) {
+    query.category = "pneumatique"
+  } else if (lower.includes("jet") || lower.includes("motomarine")) {
+    query.category = "jet_ski"
+  } else if (lower.includes("remorque")) {
+    query.category = "remorque"
+  } else if (lower.includes("moteur") && !lower.includes("bateau à moteur") && !lower.includes("bateaux à moteur")) {
+    query.category = "moteur"
+  } else if (lower.includes("bateau à moteur") || lower.includes("bateaux à moteur") || lower.includes("vedette")) {
+    query.category = "bateau_moteur"
+  } else if (lower.includes("voilier") || lower.includes("catamaran") || lower.includes("trimaran") || lower.includes("monocoque")) {
+    query.category = "voilier"
   }
 
   // Hull type

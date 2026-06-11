@@ -27,6 +27,8 @@ export interface Equipment {
 export interface BoatListing {
   id: string
   source: string
+  /** Catégorie de véhicule marin (voilier par défaut). */
+  category?: VehicleCategory
   title: string
   price?: number
   currency: string
@@ -77,6 +79,7 @@ export interface ScoreFactorDTO {
 
 export interface SearchQuery {
   raw: string
+  category?: VehicleCategory
   minPrice?: number
   maxPrice?: number
   minLength?: number
@@ -125,6 +128,43 @@ export interface PlatformStatus {
   count?: number
   error?: string
 }
+
+/**
+ * Catégories de véhicules marins. Le produit démarre sur les voiliers mais
+ * l'architecture est prête à couvrir tout l'inventaire nautique — il suffit
+ * d'activer des catégories et de tagguer les annonces ingérées.
+ */
+export type VehicleCategory =
+  | "voilier"
+  | "bateau_moteur"
+  | "pneumatique"
+  | "petit_bateau"
+  | "moteur"
+  | "remorque"
+  | "jet_ski"
+  | "peniche"
+
+export interface VehicleCategoryMeta {
+  id: VehicleCategory
+  label: string
+  /** Nom d'icône (résolu côté UI). */
+  icon: string
+  /** Accroche courte affichée sous le libellé. */
+  tagline: string
+  /** Activée dans l'expérience actuelle (les voiliers d'abord). */
+  enabled: boolean
+}
+
+export const VEHICLE_CATEGORIES: VehicleCategoryMeta[] = [
+  { id: "voilier", label: "Voiliers", icon: "sailboat", tagline: "Croisière & régate", enabled: true },
+  { id: "bateau_moteur", label: "Bateaux à moteur", icon: "ship", tagline: "Vedettes & open", enabled: true },
+  { id: "pneumatique", label: "Pneumatiques", icon: "waves", tagline: "Semi-rigides & annexes", enabled: true },
+  { id: "petit_bateau", label: "Petits bateaux", icon: "anchor", tagline: "Barques & dériveurs", enabled: true },
+  { id: "moteur", label: "Moteurs", icon: "cog", tagline: "Hors-bord & in-board", enabled: true },
+  { id: "remorque", label: "Remorques", icon: "caravan", tagline: "Transport & mise à l'eau", enabled: true },
+  { id: "jet_ski", label: "Jet-skis", icon: "zap", tagline: "Motomarines", enabled: true },
+  { id: "peniche", label: "Péniches", icon: "container", tagline: "Habitables fluviaux", enabled: false },
+]
 
 export const PLATFORMS: { id: string; displayName: string; url: string }[] = [
   { id: "leboncoin", displayName: "Leboncoin", url: "leboncoin.fr" },

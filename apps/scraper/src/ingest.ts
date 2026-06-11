@@ -108,6 +108,7 @@ async function persistBoat(boat: MergedListing): Promise<PersistResult> {
   })
 
   const common = {
+    category: boat.category ?? "voilier",
     url: boat.url,
     title: boat.title,
     price: boat.price ?? null,
