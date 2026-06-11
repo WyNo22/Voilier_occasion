@@ -1,0 +1,85 @@
+# Brancher les vraies données (ingestion réelle)
+
+Ce guide explique comment passer des données de démo aux **vraies annonces**
+scrappées, persistées en base, et affichées dans l'app.
+
+> ⚠️ Le scraping live ne fonctionne **pas** depuis l'environnement Claude Code
+> sur le web (réseau en allowlist). Il faut l'exécuter **sur ta machine**, où
+> internet est ouvert.
+
+## Architecture du flux réel
+
+```
+connecteurs (JSON-LD/sitemap)  →  extract  →  core.normalize  →  core.dedupe
+        →  Prisma upsert (Boat + PriceHistory)  →  l'app web lit la DB
+```
+
+Tant que la base est vide ou que `DATABASE_URL` n'est pas défini, l'app
+retombe automatiquement sur les données de démo : **rien ne casse**.
+
+## Étapes (sur ta machine)
+
+### 1. Lancer la base de données
+```bash
+docker compose up -d postgres
+```
+(Postgres écoute sur `localhost:5432`, identifiants dans `docker-compose.yml`.)
+
+### 2. Configurer l'environnement
+Crée un fichier `.env` à la racine (voir `.env.example`) avec au minimum :
+```
+DATABASE_URL=postgresql://voilierscope:voilierscope_password@localhost:5432/voilierscope
+```
+
+### 3. Créer le schéma en base
+```bash
+pnpm --filter @voilierscope/database run db:generate
+pnpm --filter @voilierscope/database run db:push
+```
+
+### 4. Lancer une ingestion réelle
+```bash
+DATABASE_URL=postgresql://voilierscope:voilierscope_password@localhost:5432/voilierscope \
+  pnpm --filter @voilierscope/scraper ingest "voilier 10-12m"
+```
+La commande affiche un **healthcheck** de chaque source puis les statistiques
+(découvertes / extraites / créées / baisses de prix).
+
+### 5. Lancer l'app — elle sert maintenant les vraies données
+```bash
+DATABASE_URL=postgresql://voilierscope:voilierscope_password@localhost:5432/voilierscope \
+  pnpm --filter @voilierscope/web dev
+```
+→ http://localhost:3000 — la recherche lit d'abord la base (annonces réelles),
+et ne retombe sur la démo que si la base est vide.
+
+## Calibrer les sources
+
+Les sources réelles sont définies dans
+`packages/scrapers/src/connectors/index.ts` (`REAL_SOURCE_CONFIGS`). Pour
+chaque source :
+
+1. Ouvre une fiche d'annonce dans ton navigateur, affiche le code source,
+   cherche `application/ld+json`. Si présent → le connecteur générique marche
+   tel quel. Sinon, l'Open Graph (`og:title`, `product:price:amount`…) sert de
+   secours automatique.
+2. Trouve le sitemap : souvent `https://site/sitemap.xml`, ou indiqué dans
+   `https://site/robots.txt` (ligne `Sitemap:`).
+3. Ajuste `sitemapUrl` et `listingUrlPattern` dans la config.
+
+### Si une source est protégée par un anti-bot (DataDome, Cloudflare)
+Le `healthcheck` renverra `injoignable`. Deux options :
+- **La contourner proprement** est fragile et juridiquement gris → déconseillé.
+- Implémenter un connecteur **headless** (Playwright) pour cette source
+  uniquement (le contrat `SourceConnector` est déjà prêt pour ça : il suffit
+  d'une nouvelle classe à côté de `JsonLdConnector`).
+
+La voie recommandée reste de **privilégier les sources à flux/partenaires ou
+publiant du JSON-LD** (voir `ROADMAP.md` §2).
+
+## Tests
+Le moteur d'extraction et de normalisation est couvert par des tests
+déterministes (fixtures HTML), exécutables partout :
+```bash
+pnpm test
+```

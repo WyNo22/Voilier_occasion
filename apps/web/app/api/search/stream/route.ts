@@ -8,7 +8,24 @@ import {
   coastalScore,
   dedupeListings,
 } from "@voilierscope/core"
+import { searchBoatsInDb } from "@/lib/db/boats"
 import type { SearchProgress, BoatListing } from "@voilierscope/types"
+
+/** Applique le scoring explicable + scores d'usage à une liste d'annonces. */
+function scoreAll(listings: BoatListing[], query: Parameters<typeof explainScore>[1]) {
+  return listings.map((listing) => {
+    const explained = explainScore(listing, query)
+    return {
+      ...listing,
+      relevanceScore: explained.total,
+      scoreSummary: explained.summary,
+      scoreFactors: explained.factors,
+      blueWaterScore: blueWaterScore(listing),
+      liveaboardScore: liveaboardScore(listing),
+      cruisingScore: coastalScore(listing),
+    }
+  })
+}
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -51,7 +68,23 @@ export async function GET(request: NextRequest) {
           message: `Recherche: ${rawQuery}`,
         })
 
-        // Step 2: Run scrapers
+        // Step 1b: real data first — if the DB is populated, serve it.
+        const dbListings = await searchBoatsInDb(parsedQuery)
+        if (dbListings.length > 0) {
+          send({ type: "analysis", message: "Annonces réelles trouvées en base" })
+          const scored = scoreAll(dbListings, parsedQuery)
+          const sorted = scored.sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0))
+          send({
+            type: "complete",
+            total: sorted.length,
+            listings: sorted,
+            message: `${sorted.length} annonces réelles`,
+          })
+          controller.close()
+          return
+        }
+
+        // Step 2: Run scrapers (demo data when the DB is empty / not configured)
         const scrapers = getAllScrapers()
         const allListings: BoatListing[] = []
         let totalFound = 0
@@ -69,18 +102,7 @@ export async function GET(request: NextRequest) {
             const result = await scraper.search(parsedQuery)
 
             // Score each listing with the explainable engine + use-case scores
-            const scoredListings = result.listings.map((listing) => {
-              const explained = explainScore(listing, parsedQuery)
-              return {
-                ...listing,
-                relevanceScore: explained.total,
-                scoreSummary: explained.summary,
-                scoreFactors: explained.factors,
-                blueWaterScore: blueWaterScore(listing),
-                liveaboardScore: liveaboardScore(listing),
-                cruisingScore: coastalScore(listing),
-              }
-            })
+            const scoredListings = scoreAll(result.listings, parsedQuery)
 
             allListings.push(...scoredListings)
             totalFound += result.totalFound

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getAllScrapers } from "@voilierscope/scrapers"
+import { getBoatFromDb } from "@/lib/db/boats"
 import type { BoatListing } from "@voilierscope/types"
 
 // In-memory cache for demo
@@ -35,7 +36,13 @@ export async function GET(
   try {
     const { id } = params
 
-    // Check cache first
+    // Real data first: try the database.
+    const dbBoat = await getBoatFromDb(id)
+    if (dbBoat) {
+      return NextResponse.json({ boat: dbBoat })
+    }
+
+    // Check cache (demo data)
     if (boatCache.has(id)) {
       return NextResponse.json({ boat: boatCache.get(id) })
     }

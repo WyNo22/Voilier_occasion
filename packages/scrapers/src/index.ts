@@ -1,3 +1,4 @@
+export * from "./connectors"
 export { BaseScraper } from "./base"
 export { LeboncoinScraper } from "./mock/leboncoin"
 export { BandOfBoatsScraper } from "./mock/bandofboats"
