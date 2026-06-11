@@ -37,7 +37,26 @@ async function launchBrowser(): Promise<BrowserHandle> {
     )
   }
 
-  const browser = await chromium.launch({ headless: true })
+  // Proxy optionnel (rate-limit / géo) : routage via un proxy que tu fournis.
+  // Ex: SCRAPER_PROXY="http://user:pass@host:port". N'est PAS une couche
+  // d'évasion anti-bot — juste un transport configurable.
+  const proxyServer = process.env.SCRAPER_PROXY
+  const proxy = proxyServer ? { server: proxyServer } : undefined
+
+  let browser
+  try {
+    browser = await chromium.launch({ headless: true, proxy })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    if (/Executable doesn't exist|playwright install|download new browsers/i.test(msg)) {
+      throw new Error(
+        "PLAYWRIGHT_BROWSER_MISSING: le navigateur Chromium n'est pas installé. Lance une fois :\n" +
+          "  pnpm exec playwright install chromium"
+      )
+    }
+    throw err
+  }
+
   const context = await browser.newContext({
     userAgent: DEFAULT_UA,
     locale: "fr-FR",

@@ -52,17 +52,28 @@ async function main() {
       html = await fetchTextWithRetry(url, { maxRetries: 2, timeoutMs: 20000 })
     }
   } catch (err) {
-    console.error("⛔ Récupération impossible:", err instanceof Error ? err.message : err)
+    const msg = err instanceof Error ? err.message : String(err)
+
+    // Cas 1 : navigateur pas installé (pas un blocage du site).
+    if (msg.includes("PLAYWRIGHT_BROWSER_MISSING")) {
+      console.error("⛔ Navigateur non installé (ce n'est PAS un blocage du site).")
+      console.error("\nInstalle-le une seule fois puis relance :")
+      console.error("  pnpm exec playwright install chromium")
+      process.exitCode = 1
+      return
+    }
+
+    console.error("⛔ Récupération impossible:", msg)
     if (!useBrowser) {
       console.error(
         "\nSi c'est un 403/timeout : la source refuse le HTTP simple. Réessaie avec un vrai\n" +
           "navigateur :  pnpm --filter @voilierscope/scraper calibrate --browser \"<url>\"\n" +
-          "(prérequis une seule fois : npx playwright install chromium)"
+          "(prérequis une seule fois : pnpm exec playwright install chromium)"
       )
     } else {
       console.error(
-        "\nMême via navigateur réel, la page est bloquée → anti-bot avec défi (DataDome/captcha).\n" +
-          "Cette source relève du « chantier séparé » (partenariat data)."
+        "\nMême via navigateur réel, la page n'a pas pu être lue. Si c'est un 403/redirection\n" +
+          "vers un défi, c'est un anti-bot (DataDome/captcha) → source à traiter par partenariat."
       )
     }
     process.exitCode = 1
