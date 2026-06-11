@@ -19,17 +19,92 @@ import { createBrowserContext } from "./browser"
  *
  * Copie-colle la sortie : elle suffit à régler `REAL_SOURCE_CONFIGS`.
  */
+/** Motif générique d'URL d'annonce (mot-clé catégorie + identifiant numérique). */
+const LISTING_LINK = /\/(detail|annonce|annonces|boat|boats|bateau|bateaux|barco|barcos|voilier|voiliers|listing|inserat|occasion)s?\/[^?#]*\d{3,}/i
+
+/**
+ * Sonde une source en UNE commande : depuis une page de catégorie/résultats,
+ * trouve les annonces, en ouvre une, et rapporte tout (anti-bot ? découverte ?
+ * champs JSON-LD ?). Suffit à calibrer un nouveau connecteur.
+ */
+async function probe(pageUrl: string, useBrowser: boolean): Promise<void> {
+  console.log(`🛰️  Sonde de ${pageUrl}${useBrowser ? " (navigateur réel)" : ""}\n`)
+  const ctx = useBrowser ? await createBrowserContext() : undefined
+  const fetchText = ctx ? ctx.fetchText : (u: string) => fetchTextWithRetry(u, { maxRetries: 2 })
+
+  try {
+    // 1) Page de résultats → liens d'annonces.
+    let listHtml: string
+    try {
+      listHtml = await fetchText(pageUrl)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes("PLAYWRIGHT_BROWSER_MISSING")) {
+        console.error("⛔ Navigateur non installé. (ce n'est PAS un blocage du site)")
+      } else if (!useBrowser) {
+        console.error(`⛔ HTTP simple refusé (${msg}). Réessaie avec --browser.`)
+      } else {
+        console.error(`⛔ Page illisible même via navigateur (${msg}) → anti-bot probable.`)
+      }
+      process.exitCode = 1
+      return
+    }
+
+    const links = extractLinks(listHtml, pageUrl, LISTING_LINK)
+    console.log(`Découverte : ${links.length} lien(s) d'annonce détecté(s).`)
+    links.slice(0, 5).forEach((l) => console.log(`  • ${l}`))
+    if (links.length === 0) {
+      console.log("\n⚠️  Aucun lien d'annonce reconnu. Colle-moi le HTML d'un lien d'annonce")
+      console.log("   et je règle le sélecteur de découverte pour ce site.")
+      return
+    }
+
+    // 2) Ouvre la 1re annonce → diagnostic + JSON-LD brut.
+    const sample = links[0]!
+    console.log(`\n🔎 Échantillon : ${sample}\n`)
+    const detailHtml = await fetchText(sample)
+    const d = diagnoseHtml(detailHtml)
+    console.log(`Types JSON-LD      : ${d.jsonLdTypes.join(", ") || "(aucun)"}`)
+    console.log(`Balises Open Graph : ${Object.keys(d.ogTags).join(", ") || "(aucune)"}`)
+    const e = d.extracted
+    const show = (k: string, v: unknown) => console.log(`  ${k.padEnd(10)}: ${v === undefined || v === "" ? "—" : v}`)
+    show("found", e.found)
+    show("title", e.title)
+    show("brand", e.brand)
+    show("year", e.year)
+    show("price", e.price)
+    show("lengthM", e.lengthM)
+    console.log(`\n📦 JSON-LD brut de l'échantillon :`)
+    extractRawJsonLd(detailHtml).forEach((b, i) => {
+      console.log(`----- bloc ${i + 1} -----`)
+      try {
+        console.log(JSON.stringify(JSON.parse(b), null, 2).slice(0, 4000))
+      } catch {
+        console.log(b.slice(0, 2000))
+      }
+    })
+  } finally {
+    if (ctx) await ctx.close()
+  }
+}
+
 async function main() {
   const args = process.argv.slice(2)
   const sitemapsMode = args.includes("--sitemaps")
   const useBrowser = args.includes("--browser")
   const dumpMode = args.includes("--dump")
   const linksMode = args.includes("--links")
+  const probeMode = args.includes("--probe")
   const url = args.find((a) => a.startsWith("http"))
 
   if (!url) {
     console.error("Fournis une URL. Ex: calibrate https://site/annonce/123")
     process.exitCode = 1
+    return
+  }
+
+  if (probeMode) {
+    await probe(url, useBrowser)
     return
   }
 
