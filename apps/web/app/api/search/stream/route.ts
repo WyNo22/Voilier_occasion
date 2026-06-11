@@ -9,6 +9,7 @@ import {
   dedupeListings,
 } from "@voilierscope/core"
 import { searchBoatsInDb } from "@/lib/db/boats"
+import { searchSnapshot } from "@/lib/db/snapshot"
 import type { SearchProgress, BoatListing } from "@voilierscope/types"
 
 /** Applique le scoring explicable + scores d'usage à une liste d'annonces. */
@@ -68,11 +69,12 @@ export async function GET(request: NextRequest) {
           message: `Recherche: ${rawQuery}`,
         })
 
-        // Step 1b: real data first — if the DB is populated, serve it.
+        // Step 1b: real data first — DB, then a scraped snapshot file.
         const dbListings = await searchBoatsInDb(parsedQuery)
-        if (dbListings.length > 0) {
-          send({ type: "analysis", message: "Annonces réelles trouvées en base" })
-          const scored = scoreAll(dbListings, parsedQuery)
+        const realListings = dbListings.length > 0 ? dbListings : searchSnapshot(parsedQuery)
+        if (realListings.length > 0) {
+          send({ type: "analysis", message: "Annonces réelles trouvées" })
+          const scored = scoreAll(realListings, parsedQuery)
           const sorted = scored.sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0))
           send({
             type: "complete",

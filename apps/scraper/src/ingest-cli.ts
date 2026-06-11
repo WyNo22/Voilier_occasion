@@ -1,7 +1,15 @@
+import { writeFileSync, mkdirSync } from "node:fs"
+import { dirname, resolve } from "node:path"
 import { createConnectorContext, getAllRealConnectors } from "@voilierscope/scrapers"
 import type { SearchQuery } from "@voilierscope/types"
 import { ingest, collectListings } from "./ingest"
 import { createBrowserContext } from "./browser"
+
+/** Emplacement du snapshot lu par l'app web (sans base de données). */
+function snapshotPath(): string {
+  // apps/scraper → racine du repo (../..) → data/boats.json
+  return process.env.BOATS_SNAPSHOT || resolve(process.cwd(), "..", "..", "data", "boats.json")
+}
 
 /**
  * CLI d'ingestion réelle.
@@ -55,6 +63,16 @@ async function main() {
       const price = b.price ? `${b.price.toLocaleString("fr-FR")} €` : "prix ND"
       const len = b.lengthM ? `${b.lengthM}m` : "?m"
       console.log(`  • ${b.title} — ${price} — ${b.year ?? "?"} — ${len} — ${b.location ?? b.source}`)
+    }
+
+    // Écrit le snapshot lu par l'app web (mode sans base de données).
+    if (result.listings.length > 0) {
+      const out = snapshotPath()
+      mkdirSync(dirname(out), { recursive: true })
+      writeFileSync(out, JSON.stringify(result.listings, null, 2), "utf-8")
+      console.log(`\n💾 Snapshot écrit : ${out}`)
+      console.log("   → lance maintenant l'app : pnpm --filter @voilierscope/web dev")
+      console.log("   → http://localhost:3000 affichera ces vraies annonces.")
     }
     return
   }

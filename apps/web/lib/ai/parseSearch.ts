@@ -120,10 +120,10 @@ function parseQueryFallback(raw: string): SearchQuery {
     query.category = "voilier"
   }
 
-  // Hull type
+  // Hull type — « voilier » seul n'implique PAS monocoque (un catamaran est un voilier)
   if (lower.includes("catamaran")) query.hullType = "catamaran"
   else if (lower.includes("trimaran")) query.hullType = "trimaran"
-  else if (lower.includes("voilier") || lower.includes("monocoque")) query.hullType = "monohull"
+  else if (lower.includes("monocoque")) query.hullType = "monohull"
 
   // Region detection
   if (lower.includes("méditerranée") || lower.includes("med ") || lower.includes("côte d'azur")) {

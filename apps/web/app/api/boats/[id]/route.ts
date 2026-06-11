@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getAllScrapers } from "@voilierscope/scrapers"
 import { getBoatFromDb } from "@/lib/db/boats"
+import { getSnapshotBoat } from "@/lib/db/snapshot"
 import type { BoatListing } from "@voilierscope/types"
 
 // In-memory cache for demo
@@ -36,8 +37,8 @@ export async function GET(
   try {
     const { id } = params
 
-    // Real data first: try the database.
-    const dbBoat = await getBoatFromDb(id)
+    // Real data first: try the database, then the scraped snapshot.
+    const dbBoat = (await getBoatFromDb(id)) ?? getSnapshotBoat(id)
     if (dbBoat) {
       return NextResponse.json({ boat: dbBoat })
     }
