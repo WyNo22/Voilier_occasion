@@ -43,18 +43,37 @@ async function launchBrowser(): Promise<BrowserHandle> {
   const proxyServer = process.env.SCRAPER_PROXY
   const proxy = proxyServer ? { server: proxyServer } : undefined
 
+  // Chaîne de repli : Chromium fourni par Playwright → Chrome système →
+  // Edge (toujours présent sur Windows). Évite tout téléchargement si un
+  // navigateur est déjà installé sur la machine.
+  const channelEnv = process.env.SCRAPER_BROWSER_CHANNEL // force un canal précis
+  const attempts: Array<{ channel?: string; label: string }> = channelEnv
+    ? [{ channel: channelEnv, label: channelEnv }]
+    : [
+        { channel: undefined, label: "chromium (Playwright)" },
+        { channel: "chrome", label: "Chrome système" },
+        { channel: "msedge", label: "Edge système" },
+      ]
+
   let browser
-  try {
-    browser = await chromium.launch({ headless: true, proxy })
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    if (/Executable doesn't exist|playwright install|download new browsers/i.test(msg)) {
+  let lastErr: unknown
+  for (const attempt of attempts) {
+    try {
+      browser = await chromium.launch({ headless: true, proxy, channel: attempt.channel })
+      break
+    } catch (err) {
+      lastErr = err
+    }
+  }
+  if (!browser) {
+    const msg = lastErr instanceof Error ? lastErr.message : String(lastErr)
+    if (/Executable doesn't exist|playwright install|download new browsers|channel/i.test(msg)) {
       throw new Error(
-        "PLAYWRIGHT_BROWSER_MISSING: le navigateur Chromium n'est pas installé. Lance une fois :\n" +
-          "  pnpm exec playwright install chromium"
+        "PLAYWRIGHT_BROWSER_MISSING: aucun navigateur utilisable (ni Chromium Playwright, ni " +
+          "Chrome, ni Edge). Installe-en un :\n  pnpm --filter @voilierscope/scraper exec playwright install chromium"
       )
     }
-    throw err
+    throw lastErr instanceof Error ? lastErr : new Error(msg)
   }
 
   const context = await browser.newContext({
