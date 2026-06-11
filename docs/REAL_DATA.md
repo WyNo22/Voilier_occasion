@@ -53,7 +53,31 @@ DATABASE_URL=postgresql://voilierscope:voilierscope_password@localhost:5432/voil
 → http://localhost:3000 — la recherche lit d'abord la base (annonces réelles),
 et ne retombe sur la démo que si la base est vide.
 
-## Calibrer les sources
+## Flux de données (voie privilégiée pour la couverture large)
+
+La façon la plus efficace et **légale** d'élargir l'inventaire n'est pas le
+scraping HTML mais les **flux de courtiers/partenaires** (XML, RSS, JSON, API).
+Beaucoup de courtiers exportent déjà leurs annonces vers plusieurs portails via
+des flux standardisés.
+
+Pour brancher un flux : ajoute une config dans `FEED_SOURCE_CONFIGS`
+(`packages/scrapers/src/connectors/index.ts`). Le `FeedConnector` mappe chaque
+entrée vers le schéma canonique de façon déclarative — exemple complet en
+commentaire dans ce fichier. Aucune dépendance navigateur, pas d'anti-bot.
+
+L'ingestion (`pnpm ingest`) combine automatiquement **flux + connecteurs HTML**
+via `getAllRealConnectors()`.
+
+### Proxy (optionnel)
+Pour router via un proxy (rate-limit / géo) que tu fournis légalement :
+```
+SCRAPER_PROXY="http://user:pass@host:port"
+```
+Pris en compte par le connecteur navigateur. Ce n'est pas une couche d'évasion
+anti-bot — pour les sites à fort anti-bot (Leboncoin/Facebook), la voie est le
+partenariat data, pas le contournement (voir ROADMAP.md §2).
+
+## Calibrer les sources HTML
 
 Les sources réelles sont définies dans
 `packages/scrapers/src/connectors/index.ts` (`REAL_SOURCE_CONFIGS`). Pour

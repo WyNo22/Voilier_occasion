@@ -1,4 +1,4 @@
-import { createConnectorContext, getRealConnectors } from "@voilierscope/scrapers"
+import { createConnectorContext, getAllRealConnectors } from "@voilierscope/scrapers"
 import type { SearchQuery } from "@voilierscope/types"
 import { ingest } from "./ingest"
 import { createBrowserContext } from "./browser"
@@ -20,8 +20,12 @@ async function main() {
 
   console.log(`🚢 Ingestion VoilierScope — recherche: "${raw}"${useBrowser ? " (navigateur réel)" : ""}`)
 
-  const connectors = getRealConnectors()
-  console.log(`🔌 ${connectors.length} connecteurs réels: ${connectors.map((c) => c.id).join(", ")}`)
+  const connectors = getAllRealConnectors()
+  console.log(
+    connectors.length > 0
+      ? `🔌 ${connectors.length} connecteurs réels: ${connectors.map((c) => `${c.id}[${c.kind}]`).join(", ")}`
+      : "🔌 Aucun connecteur réel configuré (ajoute des flux dans FEED_SOURCE_CONFIGS)."
+  )
 
   const browserCtx = useBrowser ? await createBrowserContext(2000) : undefined
   const ctx = browserCtx ?? createConnectorContext({ politeDelayMs: 1500, maxRetries: 3 })

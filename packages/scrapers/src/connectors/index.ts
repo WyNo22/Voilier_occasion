@@ -1,10 +1,18 @@
 import { JsonLdConnector, type JsonLdConnectorConfig } from "./jsonld-connector"
+import { FeedConnector, type FeedConnectorConfig } from "./feed"
 import type { SourceConnector } from "./types"
 
 export * from "./types"
 export * from "./http"
 export * from "./extract-jsonld"
 export { JsonLdConnector, type JsonLdConnectorConfig } from "./jsonld-connector"
+export {
+  FeedConnector,
+  parseFeedItems,
+  applyFeedMap,
+  type FeedConnectorConfig,
+  type FeedFieldMap,
+} from "./feed"
 
 /**
  * Configurations des sources réelles fondées sur JSON-LD / sitemap.
@@ -54,7 +62,44 @@ export const REAL_SOURCE_CONFIGS: JsonLdConnectorConfig[] = [
   },
 ]
 
-/** Instancie les connecteurs réels à partir des configurations. */
+/** Instancie les connecteurs HTML réels à partir des configurations. */
 export function getRealConnectors(): SourceConnector[] {
   return REAL_SOURCE_CONFIGS.map((c) => new JsonLdConnector(c))
+}
+
+/**
+ * Configurations des **flux de données** (la voie privilégiée pour la largeur
+ * d'inventaire : légale, stable, sans anti-bot).
+ *
+ * Vide par défaut — à remplir avec les flux réels de courtiers/partenaires.
+ * Exemple type d'un flux XML de courtier :
+ *
+ *   {
+ *     id: "courtier-untel",
+ *     displayName: "Courtier Untel",
+ *     baseUrl: "https://courtier-untel.fr",
+ *     format: "xml",
+ *     itemSelector: "boat",                 // élément répété
+ *     feedUrls: ["https://courtier-untel.fr/export/boats.xml"],
+ *     category: "voilier",
+ *     map: {                                // champ canonique → élément XML
+ *       externalId: "id", title: "name", brand: "make", model: "model",
+ *       year: "buildYear", price: "priceEUR", lengthM: "lengthMeters",
+ *       url: "link", photos: "photo", description: "description",
+ *     },
+ *   }
+ *
+ * Pour un flux JSON : `format: "json"`, `itemsPath: "data.listings"`, et les
+ * specs de `map` deviennent des chemins pointés ("attributes.length").
+ */
+export const FEED_SOURCE_CONFIGS: FeedConnectorConfig[] = []
+
+/** Instancie les connecteurs de flux à partir des configurations. */
+export function getFeedConnectors(): SourceConnector[] {
+  return FEED_SOURCE_CONFIGS.map((c) => new FeedConnector(c))
+}
+
+/** Tous les connecteurs réels (flux + HTML). */
+export function getAllRealConnectors(): SourceConnector[] {
+  return [...getFeedConnectors(), ...getRealConnectors()]
 }
