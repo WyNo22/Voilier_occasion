@@ -20,15 +20,42 @@ function snapshotPath(): string {
  * Sans argument, ingère un échantillon large. Les sources sont définies dans
  * `REAL_SOURCE_CONFIGS` (packages/scrapers) et calibrables sans toucher au code.
  */
+/** Lit un flag numérique (`--limit 12` ou `--limit=12`). Retourne aussi les tokens consommés. */
+function numFlag(args: string[], name: string): { value?: number; consumed: Set<number> } {
+  const consumed = new Set<number>()
+  let value: number | undefined
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!
+    if (a === `--${name}` && args[i + 1] && /^\d+$/.test(args[i + 1]!)) {
+      value = parseInt(args[i + 1]!, 10)
+      consumed.add(i).add(i + 1)
+    } else if (a.startsWith(`--${name}=`)) {
+      const n = parseInt(a.split("=")[1] || "", 10)
+      if (!Number.isNaN(n)) value = n
+      consumed.add(i)
+    }
+  }
+  return { value, consumed }
+}
+
 async function main() {
   const args = process.argv.slice(2)
   const useBrowser = args.includes("--browser")
   const dryRun = args.includes("--dry-run")
-  const raw = args.filter((a) => !a.startsWith("--")).join(" ").trim() || "voilier occasion"
+  const limit = numFlag(args, "limit")
+  const concurrency = numFlag(args, "concurrency")
+  const consumed = new Set<number>([...limit.consumed, ...concurrency.consumed])
+  const raw =
+    args
+      .filter((a, i) => !a.startsWith("--") && !consumed.has(i))
+      .join(" ")
+      .trim() || "voilier occasion"
   const query: SearchQuery = { raw }
+  const collectOptions = { limit: limit.value, concurrency: concurrency.value }
 
   console.log(
-    `🚢 ${dryRun ? "Dry-run" : "Ingestion"} VoilierScope — recherche: "${raw}"${useBrowser ? " (navigateur réel)" : ""}`
+    `🚢 ${dryRun ? "Dry-run" : "Ingestion"} VoilierScope — recherche: "${raw}"${useBrowser ? " (navigateur réel)" : ""}` +
+      `${limit.value ? ` — limite ${limit.value}/source` : ""}`
   )
 
   const connectors = getAllRealConnectors()
@@ -53,7 +80,7 @@ async function main() {
   if (dryRun) {
     let result
     try {
-      result = await collectListings(query, connectors, ctx)
+      result = await collectListings(query, connectors, ctx, collectOptions)
     } finally {
       if (browserCtx) await browserCtx.close()
     }
@@ -79,7 +106,7 @@ async function main() {
 
   let stats
   try {
-    stats = await ingest(query, connectors, ctx)
+    stats = await ingest(query, connectors, ctx, collectOptions)
   } finally {
     if (browserCtx) await browserCtx.close()
   }

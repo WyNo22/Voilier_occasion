@@ -9,7 +9,7 @@ import {
   type MergedListing,
 } from "@voilierscope/core"
 import type { ConnectorContext, SourceConnector } from "@voilierscope/scrapers"
-import type { SearchQuery } from "@voilierscope/types"
+import type { BoatListing, SearchQuery } from "@voilierscope/types"
 
 export interface IngestStats {
   discovered: number
@@ -28,24 +28,41 @@ export interface CollectResult {
   errors: number
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms))
+export interface CollectOptions {
+  /** Nombre de fiches récupérées en parallèle (défaut 4). */
+  concurrency?: number
+  /** Nombre maximum de fiches par source (utile pour un test rapide). */
+  limit?: number
+}
+
+/** Exécute `fn` sur les items avec une concurrence limitée (pool de workers). */
+async function mapPool<T>(items: T[], limit: number, fn: (item: T) => Promise<void>): Promise<void> {
+  let i = 0
+  const size = Math.max(1, Math.min(limit, items.length))
+  const workers = Array.from({ length: size }, async () => {
+    while (i < items.length) {
+      const idx = i++
+      await fn(items[idx]!)
+    }
+  })
+  await Promise.all(workers)
 }
 
 /**
- * Collecte sans persistance : découvre, récupère, extrait, normalise et
- * déduplique. Utilisé par l'ingestion (qui persiste ensuite) et par le mode
- * dry-run (qui se contente d'afficher).
+ * Collecte sans persistance : découvre, récupère (en parallèle), extrait,
+ * normalise et déduplique. Utilisé par l'ingestion et le mode dry-run.
  */
 export async function collectListings(
   query: SearchQuery,
   connectors: SourceConnector[],
-  ctx: ConnectorContext
+  ctx: ConnectorContext,
+  options: CollectOptions = {}
 ): Promise<CollectResult> {
+  const concurrency = options.concurrency ?? 4
   let discovered = 0
   let extracted = 0
   let errors = 0
-  const collected = []
+  const collected: BoatListing[] = []
 
   for (const connector of connectors) {
     let refs
@@ -56,9 +73,11 @@ export async function collectListings(
       errors++
       continue
     }
+    if (options.limit) refs = refs.slice(0, options.limit)
     discovered += refs.length
 
-    for (const ref of refs) {
+    // Récupération des fiches en parallèle (pool borné) → bien plus rapide.
+    await mapPool(refs, concurrency, async (ref) => {
       try {
         const doc = await connector.fetchDetail(ref, ctx)
         const raw = connector.extract(doc)
@@ -66,12 +85,11 @@ export async function collectListings(
           collected.push(normalizeListing(raw))
           extracted++
         }
-        await delay(ctx.politeDelayMs)
       } catch (err) {
         ctx.log("warn", `${connector.id}: échec sur ${ref.url}`, err)
         errors++
       }
-    }
+    })
   }
 
   return { listings: dedupeListings(collected), discovered, extracted, errors }
@@ -90,9 +108,10 @@ function externalIdOf(id: string, source: string): string {
 export async function ingest(
   query: SearchQuery,
   connectors: SourceConnector[],
-  ctx: ConnectorContext
+  ctx: ConnectorContext,
+  options: CollectOptions = {}
 ): Promise<IngestStats> {
-  const collected = await collectListings(query, connectors, ctx)
+  const collected = await collectListings(query, connectors, ctx, options)
   const stats: IngestStats = {
     discovered: collected.discovered,
     extracted: collected.extracted,
