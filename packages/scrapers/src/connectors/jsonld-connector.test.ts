@@ -69,3 +69,33 @@ describe("JsonLdConnector", () => {
     expect(connector.extract(doc)).toBeNull()
   })
 })
+
+describe("JsonLdConnector — pagination (crawl complet)", () => {
+  const paginated = new JsonLdConnector({
+    id: "demo",
+    displayName: "Demo",
+    baseUrl: "https://demo.test",
+    buildSearchUrls: () => ["https://demo.test/voiliers"],
+    listingLinkSelector: 'a[href*="/annonce/"]',
+    listingUrlPattern: /\/annonce\/\d+/,
+    pagination: { maxPages: 5 },
+  })
+
+  it("parcourt les pages et s'arrête quand une page n'apporte rien de neuf", async () => {
+    const ctx: ConnectorContext = {
+      fetchText: async (url) => {
+        if (url.includes("page=2"))
+          return `<a href="/annonce/3">3</a><a href="/annonce/4">4</a>`
+        if (url.includes("page=3")) return `<a href="/annonce/4">4 (déjà vu)</a>` // rien de neuf
+        // page 1 (URL de base, sans ?page)
+        return `<a href="/annonce/1">1</a><a href="/annonce/2">2</a>`
+      },
+      fetchOk: async () => true,
+      log: () => {},
+      politeDelayMs: 0,
+    }
+    const refs = await paginated.discover({ raw: "" }, ctx)
+    const ids = refs.map((r) => r.externalId).sort()
+    expect(ids).toEqual(["1", "2", "3", "4"]) // pages 1 et 2 collectées, stop en page 3
+  })
+})

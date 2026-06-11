@@ -23,6 +23,17 @@ export interface JsonLdConnectorConfig {
   listingLinkSelector?: string
   /** Nombre maximum d'annonces récupérées par recherche (politesse). */
   maxListings?: number
+  /**
+   * Pagination du crawl : parcourt les pages de résultats pour indexer tout le
+   * site (et pas seulement la 1re page). S'arrête dès qu'une page n'apporte
+   * aucun nouveau lien. Surchargeable via SCRAPER_MAX_PAGES / SCRAPER_MAX_LISTINGS.
+   */
+  pagination?: {
+    /** Construit l'URL de la page N depuis l'URL de résultats de base. */
+    pageUrl?: (baseUrl: string, page: number) => string
+    /** Nombre maximum de pages à parcourir. */
+    maxPages?: number
+  }
   /** Catégorie de véhicule par défaut des annonces de cette source. */
   category?: VehicleCategory
   /**
@@ -38,6 +49,18 @@ export interface JsonLdConnectorConfig {
    * issues du JSON-LD/Open Graph. Optionnel.
    */
   customExtract?: (html: string, $: cheerio.CheerioAPI) => Partial<RawListingInput>
+}
+
+/** URL de page par défaut : ajoute/écrase `?page=N` (page 1 = URL de base). */
+function defaultPageUrl(baseUrl: string, page: number): string {
+  if (page <= 1) return baseUrl
+  try {
+    const u = new URL(baseUrl)
+    u.searchParams.set("page", String(page))
+    return u.toString()
+  } catch {
+    return baseUrl
+  }
 }
 
 function defaultExternalId(url: string): string {
@@ -74,7 +97,12 @@ export class JsonLdConnector implements SourceConnector {
   }
 
   async discover(query: SearchQuery, ctx: ConnectorContext): Promise<SourceRef[]> {
-    const max = this.config.maxListings ?? 30
+    const maxPages = Number(process.env.SCRAPER_MAX_PAGES) || this.config.pagination?.maxPages || 1
+    const max =
+      Number(process.env.SCRAPER_MAX_LISTINGS) ||
+      this.config.maxListings ||
+      (maxPages > 1 ? 10_000 : 30)
+    const pageUrlOf = this.config.pagination?.pageUrl ?? defaultPageUrl
     const urls = new Set<string>()
 
     if (this.config.sitemapUrl) {
@@ -94,27 +122,36 @@ export class JsonLdConnector implements SourceConnector {
     }
 
     if (this.config.buildSearchUrls && this.config.listingLinkSelector) {
+      const selector = this.config.listingLinkSelector
       for (const searchUrl of this.config.buildSearchUrls(query)) {
-        try {
-          const html = await this.fetch(searchUrl, ctx)
-          const $ = cheerio.load(html)
-          $(this.config.listingLinkSelector).each((_, el) => {
-            const href = $(el).attr("href")
-            if (!href) return
-            let abs: URL
-            try {
-              abs = new URL(href, this.baseUrl)
-            } catch {
-              return
-            }
-            abs.hash = "" // ignore les ancres (#gallery, #contact…)
-            const clean = abs.toString()
-            if (this.config.listingUrlPattern && !this.config.listingUrlPattern.test(clean)) return
-            urls.add(clean)
-          })
+        // Parcourt les pages jusqu'à maxPages, ou jusqu'à ce qu'une page
+        // n'apporte aucun nouveau lien (fin de pagination / format erroné).
+        for (let page = 1; page <= maxPages && urls.size < max; page++) {
+          const pageUrl = pageUrlOf(searchUrl, page)
+          const before = urls.size
+          try {
+            const html = await this.fetch(pageUrl, ctx)
+            const $ = cheerio.load(html)
+            $(selector).each((_, el) => {
+              const href = $(el).attr("href")
+              if (!href) return
+              let abs: URL
+              try {
+                abs = new URL(href, this.baseUrl)
+              } catch {
+                return
+              }
+              abs.hash = "" // ignore les ancres (#gallery, #contact…)
+              const clean = abs.toString()
+              if (this.config.listingUrlPattern && !this.config.listingUrlPattern.test(clean)) return
+              urls.add(clean)
+            })
+          } catch (err) {
+            ctx.log("warn", `${this.id}: page ${page} illisible (${pageUrl})`, err)
+            break
+          }
+          if (urls.size === before) break // aucune nouvelle annonce → fin
           await new Promise((r) => setTimeout(r, ctx.politeDelayMs))
-        } catch (err) {
-          ctx.log("warn", `${this.id}: page de résultats illisible (${searchUrl})`, err)
         }
       }
     }

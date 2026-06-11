@@ -68,6 +68,28 @@ commentaire dans ce fichier. Aucune dépendance navigateur, pas d'anti-bot.
 L'ingestion (`pnpm ingest`) combine automatiquement **flux + connecteurs HTML**
 via `getAllRealConnectors()`.
 
+### Crawl complet (DB = le site entier)
+
+Par défaut, le crawl prend la 1re page de résultats. Pour **indexer tout le
+site**, le connecteur parcourt les pages de résultats. Profondeur pilotée par
+variables d'env (valables pour tous les connecteurs HTML) :
+
+```
+SCRAPER_MAX_PAGES=50        # nombre de pages de résultats à parcourir
+SCRAPER_MAX_LISTINGS=10000  # plafond d'annonces par passe (sécurité)
+```
+
+Le crawl **s'arrête automatiquement** dès qu'une page n'apporte aucune nouvelle
+annonce (fin de pagination, ou format d'URL de page incorrect).
+
+> ⚠️ Le format d'URL de page par défaut est `?page=N`. Si une source utilise un
+> autre format (ex: `/page-2`, `/p/2`), le crawl s'arrêtera à la page 1 :
+> fournir alors `pagination.pageUrl` dans la config du connecteur. Pour trouver
+> le format : sur le site, va en page 2 des résultats et regarde l'URL.
+
+Le worker de veille peut crawler en profondeur (background, politesse de 1,5–2s
+entre requêtes) pour maintenir l'index frais.
+
 ### Proxy (optionnel)
 Pour router via un proxy (rate-limit / géo) que tu fournis légalement :
 ```
