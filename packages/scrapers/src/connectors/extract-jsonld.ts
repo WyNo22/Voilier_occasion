@@ -123,6 +123,58 @@ export interface ExtractResult extends Partial<RawListingInput> {
   found: boolean
 }
 
+/** Rapport de diagnostic d'une page, pour calibrer un connecteur. */
+export interface PageDiagnosis {
+  jsonLdBlocks: number
+  jsonLdTypes: string[]
+  ogTags: Record<string, string>
+  extracted: ExtractResult
+}
+
+/**
+ * Analyse une page et retourne ce qu'on peut en tirer : nombre de blocs
+ * JSON-LD, leurs @type, les balises Open Graph présentes, et le résultat
+ * d'extraction. Sert à la commande de calibration.
+ */
+export function diagnoseHtml(html: string): PageDiagnosis {
+  const $ = cheerio.load(html)
+  const types: string[] = []
+  let blocks = 0
+  $('script[type="application/ld+json"]').each((_, el) => {
+    const raw = $(el).contents().text()
+    if (!raw.trim()) return
+    blocks++
+    try {
+      collectNodes(JSON.parse(raw)).forEach((n) => {
+        asArray(n["@type"]).forEach((t) => types.push(String(t)))
+      })
+    } catch {
+      types.push("(JSON-LD invalide)")
+    }
+  })
+
+  const ogTags: Record<string, string> = {}
+  for (const key of [
+    "og:title",
+    "og:description",
+    "og:image",
+    "product:price:amount",
+    "product:price:currency",
+    "og:price:amount",
+    "og:price:currency",
+  ]) {
+    const v = meta($, key)
+    if (v) ogTags[key] = v
+  }
+
+  return {
+    jsonLdBlocks: blocks,
+    jsonLdTypes: Array.from(new Set(types)),
+    ogTags,
+    extracted: extractFromHtml(html),
+  }
+}
+
 /**
  * Extrait les champs canoniques d'une page HTML d'annonce.
  * Retourne `found: false` si rien d'exploitable n'a été trouvé.

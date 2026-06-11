@@ -25,6 +25,12 @@ export interface JsonLdConnectorConfig {
   maxListings?: number
   /** Extrait l'identifiant externe depuis une URL d'annonce. */
   externalIdFromUrl?: (url: string) => string
+  /**
+   * Extraction sur-mesure propre à la source (tableau de specs, localisation,
+   * équipements en texte…). Ses valeurs définies complètent/écrasent celles
+   * issues du JSON-LD/Open Graph. Optionnel.
+   */
+  customExtract?: (html: string, $: cheerio.CheerioAPI) => Partial<RawListingInput>
 }
 
 function defaultExternalId(url: string): string {
@@ -105,22 +111,46 @@ export class JsonLdConnector implements SourceConnector {
 
   extract(doc: RawDocument): RawListingInput | null {
     const data = extractFromHtml(doc.body)
-    if (!data.found || !data.title) return null
+
+    // Extraction sur-mesure éventuelle, propre à la source.
+    let custom: Partial<RawListingInput> = {}
+    if (this.config.customExtract) {
+      try {
+        custom = this.config.customExtract(doc.body, cheerio.load(doc.body)) || {}
+      } catch {
+        custom = {}
+      }
+    }
+
+    const title = custom.title ?? data.title
+    if ((!data.found && Object.keys(custom).length === 0) || !title) return null
+
+    // Les valeurs sur-mesure définies priment ; sinon on garde le JSON-LD/OG.
+    const pick = <T>(a: T | undefined, b: T | undefined): T | undefined => (a !== undefined ? a : b)
+
     return {
       source: doc.source,
       externalId: doc.externalId,
       url: doc.url,
-      title: data.title,
-      price: data.price,
-      currency: data.currency,
-      year: data.year,
-      lengthM: data.lengthM,
-      beam: data.beam,
-      draft: data.draft,
-      brand: data.brand,
-      model: data.model,
-      description: data.description,
-      photos: data.photos ?? [],
+      title,
+      price: pick(custom.price, data.price),
+      currency: pick(custom.currency, data.currency),
+      year: pick(custom.year, data.year),
+      lengthM: pick(custom.lengthM, data.lengthM),
+      beam: pick(custom.beam, data.beam),
+      draft: pick(custom.draft, data.draft),
+      brand: pick(custom.brand, data.brand),
+      model: pick(custom.model, data.model),
+      hull: pick(custom.hull, data.hull),
+      location: pick(custom.location, data.location),
+      description: pick(custom.description, data.description),
+      photos: custom.photos ?? data.photos ?? [],
+      equipment: pick(custom.equipment, data.equipment),
+      engineBrand: custom.engineBrand,
+      enginePower: custom.enginePower,
+      engineHours: custom.engineHours,
+      cabins: custom.cabins,
+      berths: custom.berths,
     }
   }
 

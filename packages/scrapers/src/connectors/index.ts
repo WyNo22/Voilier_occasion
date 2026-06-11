@@ -36,6 +36,22 @@ export const REAL_SOURCE_CONFIGS: JsonLdConnectorConfig[] = [
     listingUrlPattern: /\/(boat|sailing|voilier)s?\//i,
     maxListings: 30,
   },
+  {
+    id: "youboat",
+    displayName: "Youboat",
+    baseUrl: "https://www.youboat.fr",
+    sitemapUrl: "https://www.youboat.fr/sitemap.xml",
+    listingUrlPattern: /\/(annonce|bateau|voilier)/i,
+    maxListings: 30,
+  },
+  {
+    id: "inautia",
+    displayName: "iNautia",
+    baseUrl: "https://www.inautia.com",
+    sitemapUrl: "https://www.inautia.com/sitemap.xml",
+    listingUrlPattern: /\/(occasion|boat|barco|bateau)/i,
+    maxListings: 30,
+  },
 ]
 
 /** Instancie les connecteurs réels à partir des configurations. */

@@ -7,6 +7,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "ingest": "tsx src/ingest-cli.ts",
+    "calibrate": "tsx src/calibrate-cli.ts",
     "type-check": "tsc --noEmit",
     "lint": "eslint src/"
   },

@@ -26,6 +26,11 @@ export interface RawListingInput {
   photos?: string[]
   condition?: string
   equipment?: BoatListing["equipment"]
+  engineBrand?: string
+  enginePower?: number
+  engineHours?: number
+  cabins?: number
+  berths?: number
   [key: string]: unknown
 }
 
@@ -105,6 +110,11 @@ export function normalizeListing(
     url: raw.url,
     condition: cleanText(raw.condition),
     equipment: raw.equipment,
+    engineBrand: cleanText(raw.engineBrand),
+    enginePower: raw.enginePower,
+    engineHours: raw.engineHours,
+    cabins: raw.cabins,
+    berths: raw.berths,
     scrapedAt: new Date(),
   }
 }

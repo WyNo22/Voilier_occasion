@@ -82,6 +82,28 @@ export async function isReachable(url: string, timeoutMs = 8000): Promise<boolea
   }
 }
 
+/**
+ * Découvre les URLs de sitemap déclarées dans le robots.txt d'un domaine.
+ * Respecte la convention `Sitemap: <url>`. Retourne [] si robots.txt absent.
+ */
+export async function findSitemapsViaRobots(
+  baseUrl: string,
+  opts: HttpClientOptions = {}
+): Promise<string[]> {
+  try {
+    const robotsUrl = new URL("/robots.txt", baseUrl).toString()
+    const txt = await fetchTextWithRetry(robotsUrl, { ...opts, maxRetries: 1 })
+    return txt
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => /^sitemap:/i.test(line))
+      .map((line) => line.replace(/^sitemap:\s*/i, "").trim())
+      .filter(Boolean)
+  } catch {
+    return []
+  }
+}
+
 /** Construit un contexte de connecteur prêt à l'emploi (HTTP réel + logger). */
 export function createConnectorContext(opts: HttpClientOptions = {}): ConnectorContext {
   return {
