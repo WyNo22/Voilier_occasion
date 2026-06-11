@@ -1,7 +1,7 @@
 import * as cheerio from "cheerio"
 import type { RawListingInput } from "@voilierscope/core"
 import type { SearchQuery, VehicleCategory } from "@voilierscope/types"
-import type { ConnectorContext, ConnectorHealth, RawDocument, SourceConnector, SourceRef } from "./types"
+import type { ConnectorContext, ConnectorHealth, RawDocument, SourceConnector, SourceRef, SourceTransport } from "./types"
 import { extractFromHtml } from "./extract-jsonld"
 
 export interface JsonLdConnectorConfig {
@@ -25,6 +25,11 @@ export interface JsonLdConnectorConfig {
   maxListings?: number
   /** Catégorie de véhicule par défaut des annonces de cette source. */
   category?: VehicleCategory
+  /**
+   * Transport dédié à cette source (sinon le transport du contexte est utilisé).
+   * C'est ici qu'on branche un fetcher spécifique à une source protégée.
+   */
+  transport?: SourceTransport
   /** Extrait l'identifiant externe depuis une URL d'annonce. */
   externalIdFromUrl?: (url: string) => string
   /**
@@ -63,13 +68,18 @@ export class JsonLdConnector implements SourceConnector {
     this.baseUrl = config.baseUrl
   }
 
+  /** Récupère une URL via le transport dédié de la source, sinon celui du contexte. */
+  private fetch(url: string, ctx: ConnectorContext): Promise<string> {
+    return this.config.transport ? this.config.transport(url, ctx) : ctx.fetchText(url)
+  }
+
   async discover(query: SearchQuery, ctx: ConnectorContext): Promise<SourceRef[]> {
     const max = this.config.maxListings ?? 30
     const urls = new Set<string>()
 
     if (this.config.sitemapUrl) {
       try {
-        const xml = await ctx.fetchText(this.config.sitemapUrl)
+        const xml = await this.fetch(this.config.sitemapUrl, ctx)
         const $ = cheerio.load(xml, { xmlMode: true })
         $("loc").each((_, el) => {
           const loc = $(el).text().trim()
@@ -86,7 +96,7 @@ export class JsonLdConnector implements SourceConnector {
     if (this.config.buildSearchUrls && this.config.listingLinkSelector) {
       for (const searchUrl of this.config.buildSearchUrls(query)) {
         try {
-          const html = await ctx.fetchText(searchUrl)
+          const html = await this.fetch(searchUrl, ctx)
           const $ = cheerio.load(html)
           $(this.config.listingLinkSelector).each((_, el) => {
             const href = $(el).attr("href")
@@ -116,7 +126,7 @@ export class JsonLdConnector implements SourceConnector {
   }
 
   async fetchDetail(ref: SourceRef, ctx: ConnectorContext): Promise<RawDocument> {
-    const body = await ctx.fetchText(ref.url)
+    const body = await this.fetch(ref.url, ctx)
     return { source: ref.source, externalId: ref.externalId, url: ref.url, contentType: "html", body }
   }
 

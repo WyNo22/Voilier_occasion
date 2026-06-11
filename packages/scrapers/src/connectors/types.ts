@@ -26,6 +26,14 @@ export interface SourceConnector {
   healthcheck(ctx: ConnectorContext): Promise<ConnectorHealth>
 }
 
+/**
+ * Transport injectable par source : récupère le contenu d'une URL. Permet de
+ * brancher un fetcher dédié (navigateur spécifique, proxy, module externe
+ * d'accès à une source protégée) sans modifier la logique du connecteur.
+ * Le code d'accès spécifique vit ici, isolé ; le framework fait le reste.
+ */
+export type SourceTransport = (url: string, ctx: ConnectorContext) => Promise<string>
+
 /** Référence vers une annonce à récupérer. */
 export interface SourceRef {
   source: string

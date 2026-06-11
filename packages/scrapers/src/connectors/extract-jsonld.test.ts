@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { extractFromHtml, findListingCandidates } from "./extract-jsonld"
+import { extractFromHtml, findListingCandidates, extractNextData } from "./extract-jsonld"
 
 // Fixture représentative : une fiche d'annonce avec JSON-LD schema.org/Product,
 // telle qu'on en trouve sur de nombreux sites marchands.
@@ -82,6 +82,22 @@ describe("extractFromHtml — JSON-LD", () => {
     expect(r.year).toBe(2010)
     expect(r.price).toBe(128000)
     expect(r.currency).toBe("USD")
+  })
+})
+
+describe("extractNextData", () => {
+  it("parse le JSON embarqué __NEXT_DATA__ (technique liste de résultats)", () => {
+    const html = `<html><body>
+      <script id="__NEXT_DATA__" type="application/json">
+      {"props":{"pageProps":{"listings":[{"id":1,"title":"Voilier A"},{"id":2,"title":"Voilier B"}]}}}
+      </script></body></html>`
+    const data = extractNextData(html) as { props: { pageProps: { listings: unknown[] } } }
+    expect(data).not.toBeNull()
+    expect(data.props.pageProps.listings).toHaveLength(2)
+  })
+
+  it("retourne null sans __NEXT_DATA__", () => {
+    expect(extractNextData("<html><body>rien</body></html>")).toBeNull()
   })
 })
 

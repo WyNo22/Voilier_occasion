@@ -5,6 +5,7 @@ import {
   extractRawJsonLd,
   extractLinks,
   findListingCandidates,
+  extractNextData,
 } from "@voilierscope/scrapers"
 import { createBrowserContext } from "./browser"
 
@@ -76,6 +77,7 @@ async function probe(pageUrl: string, useBrowser: boolean): Promise<void> {
     const d = diagnoseHtml(detailHtml)
     console.log(`Types JSON-LD      : ${d.jsonLdTypes.join(", ") || "(aucun)"}`)
     console.log(`Balises Open Graph : ${Object.keys(d.ogTags).join(", ") || "(aucune)"}`)
+    console.log(`__NEXT_DATA__      : ${d.nextData ? `présent (clés: ${d.nextDataKeys.join(", ")})` : "absent"}`)
     const e = d.extracted
     const show = (k: string, v: unknown) => console.log(`  ${k.padEnd(10)}: ${v === undefined || v === "" ? "—" : v}`)
     show("found", e.found)
@@ -171,7 +173,7 @@ async function main() {
     if (closeBrowser) await closeBrowser()
   }
 
-  // Mode --dump : affiche le JSON-LD brut (pour mapper les champs manquants).
+  // Mode --dump : affiche le JSON-LD brut + le JSON embarqué __NEXT_DATA__.
   if (dumpMode) {
     const blocks = extractRawJsonLd(html)
     console.log(`📦 ${blocks.length} bloc(s) JSON-LD brut(s) :\n`)
@@ -183,6 +185,13 @@ async function main() {
         console.log(b)
       }
     })
+
+    const nextData = extractNextData(html)
+    if (nextData) {
+      console.log(`\n📦 __NEXT_DATA__ (JSON embarqué — souvent toutes les annonces de la page) :`)
+      const json = JSON.stringify(nextData, null, 2)
+      console.log(json.length > 12000 ? json.slice(0, 12000) + "\n…(tronqué)" : json)
+    }
     return
   }
 

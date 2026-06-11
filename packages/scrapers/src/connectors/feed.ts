@@ -2,7 +2,7 @@ import * as cheerio from "cheerio"
 import type { RawListingInput } from "@voilierscope/core"
 import { parsePriceNumber } from "@voilierscope/core"
 import type { SearchQuery, VehicleCategory } from "@voilierscope/types"
-import type { ConnectorContext, ConnectorHealth, RawDocument, SourceConnector, SourceRef } from "./types"
+import type { ConnectorContext, ConnectorHealth, RawDocument, SourceConnector, SourceRef, SourceTransport } from "./types"
 
 /**
  * Connecteur générique pour les **flux de données** (XML/RSS, JSON, API de
@@ -33,6 +33,8 @@ export interface FeedConnectorConfig {
   map: FeedFieldMap
   /** Catégorie par défaut des annonces de ce flux. */
   category?: VehicleCategory
+  /** Transport dédié (sinon celui du contexte). */
+  transport?: SourceTransport
   maxItems?: number
 }
 
@@ -148,7 +150,7 @@ export class FeedConnector implements SourceConnector {
 
     for (const url of this.feedUrls(query)) {
       try {
-        const body = await ctx.fetchText(url)
+        const body = await (this.config.transport ? this.config.transport(url, ctx) : ctx.fetchText(url))
         const items = parseFeedItems(body, this.config)
         for (const item of items) {
           const mapped = applyFeedMap(item, this.config.map)

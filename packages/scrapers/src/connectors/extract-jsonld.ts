@@ -123,6 +123,39 @@ export interface ExtractResult extends Partial<RawListingInput> {
   found: boolean
 }
 
+/**
+ * Extrait le JSON embarqué par le site lui-même (`<script id="__NEXT_DATA__">`
+ * des sites Next.js, ou `<script type="application/json">`). Technique propre
+ * et puissante : la page de résultats contient souvent **toutes** les annonces
+ * en JSON, ce qui évite de visiter chaque fiche (souvent protégée).
+ */
+export function extractNextData(html: string): unknown | null {
+  const $ = cheerio.load(html)
+  const raw = $("script#__NEXT_DATA__").first().contents().text().trim()
+  if (!raw) return null
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
+}
+
+/** Tous les blocs `<script type="application/json">` parsés (hors JSON-LD). */
+export function extractEmbeddedJson(html: string): unknown[] {
+  const $ = cheerio.load(html)
+  const out: unknown[] = []
+  $('script[type="application/json"]').each((_, el) => {
+    const raw = $(el).contents().text().trim()
+    if (!raw) return
+    try {
+      out.push(JSON.parse(raw))
+    } catch {
+      /* bloc non-JSON */
+    }
+  })
+  return out
+}
+
 /** Retourne le contenu brut des blocs JSON-LD (pour calibration). */
 export function extractRawJsonLd(html: string): string[] {
   const $ = cheerio.load(html)
@@ -215,6 +248,9 @@ export interface PageDiagnosis {
   jsonLdBlocks: number
   jsonLdTypes: string[]
   ogTags: Record<string, string>
+  /** Présence et clés de tête du JSON embarqué `__NEXT_DATA__`. */
+  nextData: boolean
+  nextDataKeys: string[]
   extracted: ExtractResult
 }
 
@@ -254,10 +290,16 @@ export function diagnoseHtml(html: string): PageDiagnosis {
     if (v) ogTags[key] = v
   }
 
+  const nextData = extractNextData(html)
+  const nextDataKeys =
+    nextData && typeof nextData === "object" ? Object.keys(nextData as Record<string, unknown>) : []
+
   return {
     jsonLdBlocks: blocks,
     jsonLdTypes: Array.from(new Set(types)),
     ogTags,
+    nextData: nextData !== null,
+    nextDataKeys,
     extracted: extractFromHtml(html),
   }
 }
