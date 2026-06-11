@@ -3,6 +3,7 @@ import {
   findSitemapsViaRobots,
   diagnoseHtml,
 } from "@voilierscope/scrapers"
+import { createBrowserContext } from "./browser"
 
 /**
  * Outil de calibration d'une source. À lancer sur une machine au réseau ouvert.
@@ -19,6 +20,7 @@ import {
 async function main() {
   const args = process.argv.slice(2)
   const sitemapsMode = args.includes("--sitemaps")
+  const useBrowser = args.includes("--browser")
   const url = args.find((a) => a.startsWith("http"))
 
   if (!url) {
@@ -38,17 +40,35 @@ async function main() {
     return
   }
 
-  console.log(`🔎 Diagnostic de ${url}\n`)
+  console.log(`🔎 Diagnostic de ${url}${useBrowser ? " (navigateur réel)" : ""}\n`)
   let html: string
+  let closeBrowser: (() => Promise<void>) | undefined
   try {
-    html = await fetchTextWithRetry(url, { maxRetries: 2, timeoutMs: 20000 })
+    if (useBrowser) {
+      const ctx = await createBrowserContext()
+      closeBrowser = ctx.close
+      html = await ctx.fetchText(url)
+    } else {
+      html = await fetchTextWithRetry(url, { maxRetries: 2, timeoutMs: 20000 })
+    }
   } catch (err) {
     console.error("⛔ Récupération impossible:", err instanceof Error ? err.message : err)
-    console.error(
-      "\nSi c'est un 403/timeout, la source a probablement un anti-bot → un connecteur headless (Playwright) sera nécessaire pour celle-ci."
-    )
+    if (!useBrowser) {
+      console.error(
+        "\nSi c'est un 403/timeout : la source refuse le HTTP simple. Réessaie avec un vrai\n" +
+          "navigateur :  pnpm --filter @voilierscope/scraper calibrate --browser \"<url>\"\n" +
+          "(prérequis une seule fois : npx playwright install chromium)"
+      )
+    } else {
+      console.error(
+        "\nMême via navigateur réel, la page est bloquée → anti-bot avec défi (DataDome/captcha).\n" +
+          "Cette source relève du « chantier séparé » (partenariat data)."
+      )
+    }
     process.exitCode = 1
     return
+  } finally {
+    if (closeBrowser) await closeBrowser()
   }
 
   const d = diagnoseHtml(html)

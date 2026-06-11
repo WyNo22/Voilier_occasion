@@ -1,6 +1,7 @@
 import { createConnectorContext, getRealConnectors } from "@voilierscope/scrapers"
 import type { SearchQuery } from "@voilierscope/types"
 import { ingest } from "./ingest"
+import { createBrowserContext } from "./browser"
 
 /**
  * CLI d'ingestion réelle.
@@ -12,15 +13,18 @@ import { ingest } from "./ingest"
  * `REAL_SOURCE_CONFIGS` (packages/scrapers) et calibrables sans toucher au code.
  */
 async function main() {
-  const raw = process.argv.slice(2).join(" ").trim() || "voilier occasion"
+  const args = process.argv.slice(2)
+  const useBrowser = args.includes("--browser")
+  const raw = args.filter((a) => !a.startsWith("--")).join(" ").trim() || "voilier occasion"
   const query: SearchQuery = { raw }
 
-  console.log(`🚢 Ingestion VoilierScope — recherche: "${raw}"`)
+  console.log(`🚢 Ingestion VoilierScope — recherche: "${raw}"${useBrowser ? " (navigateur réel)" : ""}`)
 
   const connectors = getRealConnectors()
   console.log(`🔌 ${connectors.length} connecteurs réels: ${connectors.map((c) => c.id).join(", ")}`)
 
-  const ctx = createConnectorContext({ politeDelayMs: 1500, maxRetries: 3 })
+  const browserCtx = useBrowser ? await createBrowserContext(2000) : undefined
+  const ctx = browserCtx ?? createConnectorContext({ politeDelayMs: 1500, maxRetries: 3 })
 
   // Healthchecks (diagnostique anti-bot / réseau avant de lancer).
   for (const c of connectors) {
@@ -29,7 +33,12 @@ async function main() {
   }
 
   const start = Date.now()
-  const stats = await ingest(query, connectors, ctx)
+  let stats
+  try {
+    stats = await ingest(query, connectors, ctx)
+  } finally {
+    if (browserCtx) await browserCtx.close()
+  }
   const seconds = ((Date.now() - start) / 1000).toFixed(1)
 
   console.log("\n📊 Résultat de l'ingestion:")
