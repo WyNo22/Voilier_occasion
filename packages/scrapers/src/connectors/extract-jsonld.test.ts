@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { extractFromHtml } from "./extract-jsonld"
+import { extractFromHtml, findListingCandidates } from "./extract-jsonld"
 
 // Fixture représentative : une fiche d'annonce avec JSON-LD schema.org/Product,
 // telle qu'on en trouve sur de nombreux sites marchands.
@@ -82,6 +82,24 @@ describe("extractFromHtml — JSON-LD", () => {
     expect(r.year).toBe(2010)
     expect(r.price).toBe(128000)
     expect(r.currency).toBe("USD")
+  })
+})
+
+describe("findListingCandidates", () => {
+  const RESULTS = `<html><body>
+    <a href="https://www.youboat.com/fr/bateau/2018-lagoon-450-f-10180685/">A</a>
+    <a href="/fr/bateaux-a-vendre/180545">B</a>
+    <a href="https://static.cdn.com/images/180545/photo-123.jpg">image</a>
+    <a href="/fr/voiliers/">catégorie</a>
+    <a href="/assets/app-12345.js">script</a>
+  </body></html>`
+
+  it("garde les vraies annonces, exclut images/assets/CDN/catégories", () => {
+    const links = findListingCandidates(RESULTS, "https://www.youboat.com/fr/bateaux/")
+    expect(links).toContain("https://www.youboat.com/fr/bateau/2018-lagoon-450-f-10180685/")
+    expect(links).toContain("https://www.youboat.com/fr/bateaux-a-vendre/180545")
+    expect(links.some((l) => l.includes(".jpg") || l.includes(".js"))).toBe(false)
+    expect(links.some((l) => l.endsWith("/voiliers/"))).toBe(false)
   })
 })
 

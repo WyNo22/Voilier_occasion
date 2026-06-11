@@ -158,6 +158,40 @@ export function parseDimensionsFromText(text: string): {
   }
 }
 
+const ASSET_RE = /\.(jpg|jpeg|png|webp|gif|svg|css|js|mjs|woff2?|ico|pdf|mp4|json|xml|avif)(\?|$)/i
+
+/**
+ * Détecte les liens d'annonces sur une page de résultats, de façon robuste et
+ * générique : même domaine, pas d'asset (image/css/js), et chemin se terminant
+ * par un identifiant numérique (ex: `/180545`, `/...-10180685/`, `/detail/670316/`).
+ */
+export function findListingCandidates(html: string, baseUrl: string): string[] {
+  const $ = cheerio.load(html)
+  let host = ""
+  try {
+    host = new URL(baseUrl).host
+  } catch {
+    /* baseUrl invalide */
+  }
+  const urls = new Set<string>()
+  $("a[href]").each((_, el) => {
+    const href = $(el).attr("href")
+    if (!href) return
+    let u: URL
+    try {
+      u = new URL(href, baseUrl)
+    } catch {
+      return
+    }
+    if (host && u.host !== host) return // exclut les CDN d'images
+    if (ASSET_RE.test(u.pathname)) return
+    if (!/[/-]\d{4,}\/?$/.test(u.pathname)) return // doit finir par un id d'annonce
+    u.hash = ""
+    urls.add(u.toString())
+  })
+  return Array.from(urls)
+}
+
 /** Liste les liens internes correspondant à un motif (découverte d'annonces). */
 export function extractLinks(html: string, baseUrl: string, pattern: RegExp): string[] {
   const $ = cheerio.load(html)

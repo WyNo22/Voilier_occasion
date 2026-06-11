@@ -4,6 +4,7 @@ import {
   diagnoseHtml,
   extractRawJsonLd,
   extractLinks,
+  findListingCandidates,
 } from "@voilierscope/scrapers"
 import { createBrowserContext } from "./browser"
 
@@ -19,9 +20,6 @@ import { createBrowserContext } from "./browser"
  *
  * Copie-colle la sortie : elle suffit à régler `REAL_SOURCE_CONFIGS`.
  */
-/** Motif générique d'URL d'annonce (mot-clé catégorie + identifiant numérique). */
-const LISTING_LINK = /\/(detail|annonce|annonces|boat|boats|bateau|bateaux|barco|barcos|voilier|voiliers|listing|inserat|occasion)s?\/[^?#]*\d{3,}/i
-
 /**
  * Sonde une source en UNE commande : depuis une page de catégorie/résultats,
  * trouve les annonces, en ouvre une, et rapporte tout (anti-bot ? découverte ?
@@ -50,19 +48,31 @@ async function probe(pageUrl: string, useBrowser: boolean): Promise<void> {
       return
     }
 
-    const links = extractLinks(listHtml, pageUrl, LISTING_LINK)
+    const links = findListingCandidates(listHtml, pageUrl)
     console.log(`Découverte : ${links.length} lien(s) d'annonce détecté(s).`)
     links.slice(0, 5).forEach((l) => console.log(`  • ${l}`))
     if (links.length === 0) {
-      console.log("\n⚠️  Aucun lien d'annonce reconnu. Colle-moi le HTML d'un lien d'annonce")
-      console.log("   et je règle le sélecteur de découverte pour ce site.")
+      console.log("\n⚠️  Aucun lien d'annonce reconnu. Es-tu bien sur une page de RÉSULTATS")
+      console.log("   (liste d'annonces), pas une fiche ? Sinon colle-moi le HTML d'un lien")
+      console.log("   d'annonce et je règle le sélecteur de découverte pour ce site.")
       return
     }
 
     // 2) Ouvre la 1re annonce → diagnostic + JSON-LD brut.
     const sample = links[0]!
     console.log(`\n🔎 Échantillon : ${sample}\n`)
-    const detailHtml = await fetchText(sample)
+    let detailHtml: string
+    try {
+      detailHtml = await fetchText(sample)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error(`⛔ Fiche illisible (${msg}).`)
+      console.error(
+        "\nLa découverte fonctionne mais les fiches sont protégées (anti-bot sur le détail).\n" +
+          "→ Source à traiter par flux/partenariat, ou via ton module de transport dédié."
+      )
+      return
+    }
     const d = diagnoseHtml(detailHtml)
     console.log(`Types JSON-LD      : ${d.jsonLdTypes.join(", ") || "(aucun)"}`)
     console.log(`Balises Open Graph : ${Object.keys(d.ogTags).join(", ") || "(aucune)"}`)
