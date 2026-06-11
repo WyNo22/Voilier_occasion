@@ -1,7 +1,40 @@
 import { JsonLdConnector, type JsonLdConnectorConfig } from "./jsonld-connector"
 import { FeedConnector, type FeedConnectorConfig } from "./feed"
-import { parseDimensionsFromText } from "./extract-jsonld"
+import { parseDimensionsFromText, extractRawJsonLd } from "./extract-jsonld"
+import type { RawListingInput } from "@voilierscope/core"
 import type { SourceConnector } from "./types"
+
+/** Trouve le nœud JSON-LD de type Vehicle/Product dans une page. */
+function findVehicleNode(html: string): Record<string, unknown> | null {
+  for (const raw of extractRawJsonLd(html)) {
+    try {
+      const node = JSON.parse(raw)
+      const type = String(node["@type"] ?? "").toLowerCase()
+      if (type === "vehicle" || type === "product") return node
+    } catch {
+      /* bloc invalide */
+    }
+  }
+  return null
+}
+
+/** Extraction sur-mesure bandofboats : coque, localisation, dimensions. */
+function bandofboatsExtract(html: string): Partial<RawListingInput> {
+  const out: Partial<RawListingInput> = {}
+  const descMatch = html.match(/"description"\s*:\s*"([\s\S]*?)"\s*,\s*"/)
+  if (descMatch?.[1]) Object.assign(out, parseDimensionsFromText(descMatch[1]))
+
+  const node = findVehicleNode(html)
+  const offers = node?.["offers"] as Record<string, unknown> | undefined
+  if (offers) {
+    const cat = String(offers["category"] ?? "")
+    if (/catamaran|multicoque/i.test(cat)) out.hull = "catamaran"
+    else if (/trimaran/i.test(cat)) out.hull = "trimaran"
+    else if (/monocoque|voilier|sailing/i.test(cat)) out.hull = "monohull"
+    if (typeof offers["availableAtOrFrom"] === "string") out.location = offers["availableAtOrFrom"] as string
+  }
+  return out
+}
 
 export * from "./types"
 export * from "./http"
@@ -54,12 +87,21 @@ export const REAL_SOURCE_CONFIGS: JsonLdConnectorConfig[] = [
     },
   },
   {
+    // ✅ Calibré (JSON-LD schema.org/Vehicle, fiches accessibles via navigateur).
     id: "bandofboats",
     displayName: "Band of Boats",
     baseUrl: "https://www.bandofboats.com",
-    sitemapUrl: "https://www.bandofboats.com/sitemap.xml",
-    listingUrlPattern: /\/(boat|bateau|annonce|listing)s?\//i,
+    buildSearchUrls: (query) => {
+      if (query.category === "bateau_moteur")
+        return ["https://www.bandofboats.com/fr/types-de-bateaux/bateau-a-moteur"]
+      return ["https://www.bandofboats.com/fr/types-de-bateaux/voilier"]
+    },
+    listingLinkSelector: 'a[href*="/bateaux-a-vendre/"]',
+    listingUrlPattern: /\/bateaux-a-vendre\/\d+$/,
+    externalIdFromUrl: (url) => url.match(/\/bateaux-a-vendre\/(\d+)/)?.[1] ?? url,
+    category: "voilier",
     maxListings: 30,
+    customExtract: (html) => bandofboatsExtract(html),
   },
   {
     id: "youboat",
