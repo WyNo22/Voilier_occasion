@@ -134,6 +134,30 @@ export function extractRawJsonLd(html: string): string[] {
   return blocks
 }
 
+/**
+ * Extrait des dimensions (longueur, largeur, tirant d'eau) depuis un texte
+ * libre français du type « Longueur : 14,99m, Largeur 7,98 m ». Utile en
+ * complément quand le site ne fournit pas ces specs en structuré.
+ */
+export function parseDimensionsFromText(text: string): {
+  lengthM?: number
+  beam?: number
+  draft?: number
+} {
+  if (!text) return {}
+  const num = (re: RegExp): number | undefined => {
+    const m = text.match(re)
+    if (!m || !m[1]) return undefined
+    const n = parseFloat(m[1].replace(",", "."))
+    return Number.isNaN(n) || n <= 0 || n > 200 ? undefined : n
+  }
+  return {
+    lengthM: num(/longueur[^0-9]{0,12}(\d{1,3}(?:[.,]\d{1,2})?)\s*m\b/i),
+    beam: num(/largeur[^0-9]{0,12}(\d{1,2}(?:[.,]\d{1,2})?)\s*m\b/i),
+    draft: num(/tirant[^0-9]{0,18}(\d{1,2}(?:[.,]\d{1,2})?)\s*m\b/i),
+  }
+}
+
 /** Liste les liens internes correspondant à un motif (découverte d'annonces). */
 export function extractLinks(html: string, baseUrl: string, pattern: RegExp): string[] {
   const $ = cheerio.load(html)
@@ -243,6 +267,11 @@ export function extractFromHtml(html: string): ExtractResult {
     result.lengthM = specs.lengthM
     result.beam = specs.beam
     result.draft = specs.draft
+    // schema.org/Vehicle : type de coque et motorisation.
+    if (typeof listingNode["bodyType"] === "string") result.hull = listingNode["bodyType"] as string
+    if (typeof listingNode["vehicleEngine"] === "string") {
+      result.engineBrand = listingNode["vehicleEngine"] as string
+    }
   }
 
   // 2) Open Graph en complément (ne remplace jamais une valeur déjà trouvée)

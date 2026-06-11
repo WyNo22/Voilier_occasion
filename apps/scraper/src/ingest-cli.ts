@@ -1,6 +1,6 @@
 import { createConnectorContext, getAllRealConnectors } from "@voilierscope/scrapers"
 import type { SearchQuery } from "@voilierscope/types"
-import { ingest } from "./ingest"
+import { ingest, collectListings } from "./ingest"
 import { createBrowserContext } from "./browser"
 
 /**
@@ -15,10 +15,13 @@ import { createBrowserContext } from "./browser"
 async function main() {
   const args = process.argv.slice(2)
   const useBrowser = args.includes("--browser")
+  const dryRun = args.includes("--dry-run")
   const raw = args.filter((a) => !a.startsWith("--")).join(" ").trim() || "voilier occasion"
   const query: SearchQuery = { raw }
 
-  console.log(`🚢 Ingestion VoilierScope — recherche: "${raw}"${useBrowser ? " (navigateur réel)" : ""}`)
+  console.log(
+    `🚢 ${dryRun ? "Dry-run" : "Ingestion"} VoilierScope — recherche: "${raw}"${useBrowser ? " (navigateur réel)" : ""}`
+  )
 
   const connectors = getAllRealConnectors()
   console.log(
@@ -37,6 +40,25 @@ async function main() {
   }
 
   const start = Date.now()
+
+  // Mode dry-run : collecte + affiche, sans base de données.
+  if (dryRun) {
+    let result
+    try {
+      result = await collectListings(query, connectors, ctx)
+    } finally {
+      if (browserCtx) await browserCtx.close()
+    }
+    const secs = ((Date.now() - start) / 1000).toFixed(1)
+    console.log(`\n🔎 ${result.listings.length} annonce(s) (${result.discovered} découvertes, ${result.errors} erreurs, ${secs}s) :\n`)
+    for (const b of result.listings.slice(0, 30)) {
+      const price = b.price ? `${b.price.toLocaleString("fr-FR")} €` : "prix ND"
+      const len = b.lengthM ? `${b.lengthM}m` : "?m"
+      console.log(`  • ${b.title} — ${price} — ${b.year ?? "?"} — ${len} — ${b.location ?? b.source}`)
+    }
+    return
+  }
+
   let stats
   try {
     stats = await ingest(query, connectors, ctx)

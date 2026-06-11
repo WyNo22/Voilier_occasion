@@ -21,8 +21,60 @@ export interface IngestStats {
   errors: number
 }
 
+export interface CollectResult {
+  listings: MergedListing[]
+  discovered: number
+  extracted: number
+  errors: number
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms))
+}
+
+/**
+ * Collecte sans persistance : découvre, récupère, extrait, normalise et
+ * déduplique. Utilisé par l'ingestion (qui persiste ensuite) et par le mode
+ * dry-run (qui se contente d'afficher).
+ */
+export async function collectListings(
+  query: SearchQuery,
+  connectors: SourceConnector[],
+  ctx: ConnectorContext
+): Promise<CollectResult> {
+  let discovered = 0
+  let extracted = 0
+  let errors = 0
+  const collected = []
+
+  for (const connector of connectors) {
+    let refs
+    try {
+      refs = await connector.discover(query, ctx)
+    } catch (err) {
+      ctx.log("error", `${connector.id}: découverte échouée`, err)
+      errors++
+      continue
+    }
+    discovered += refs.length
+
+    for (const ref of refs) {
+      try {
+        const doc = await connector.fetchDetail(ref, ctx)
+        const raw = connector.extract(doc)
+        if (raw) {
+          collected.push(normalizeListing(raw))
+          extracted++
+        }
+        await delay(ctx.politeDelayMs)
+      } catch (err) {
+        ctx.log("warn", `${connector.id}: échec sur ${ref.url}`, err)
+        errors++
+      }
+    }
+  }
+
+  return { listings: dedupeListings(collected), discovered, extracted, errors }
 }
 
 function externalIdOf(id: string, source: string): string {
@@ -40,49 +92,18 @@ export async function ingest(
   connectors: SourceConnector[],
   ctx: ConnectorContext
 ): Promise<IngestStats> {
+  const collected = await collectListings(query, connectors, ctx)
   const stats: IngestStats = {
-    discovered: 0,
-    extracted: 0,
-    unique: 0,
+    discovered: collected.discovered,
+    extracted: collected.extracted,
+    unique: collected.listings.length,
     created: 0,
     updated: 0,
     priceDrops: 0,
-    errors: 0,
+    errors: collected.errors,
   }
 
-  const collected = []
-
-  for (const connector of connectors) {
-    let refs
-    try {
-      refs = await connector.discover(query, ctx)
-    } catch (err) {
-      ctx.log("error", `${connector.id}: découverte échouée`, err)
-      stats.errors++
-      continue
-    }
-    stats.discovered += refs.length
-
-    for (const ref of refs) {
-      try {
-        const doc = await connector.fetchDetail(ref, ctx)
-        const raw = connector.extract(doc)
-        if (raw) {
-          collected.push(normalizeListing(raw))
-          stats.extracted++
-        }
-        await delay(ctx.politeDelayMs)
-      } catch (err) {
-        ctx.log("warn", `${connector.id}: échec sur ${ref.url}`, err)
-        stats.errors++
-      }
-    }
-  }
-
-  const deduped = dedupeListings(collected)
-  stats.unique = deduped.length
-
-  for (const boat of deduped) {
+  for (const boat of collected.listings) {
     try {
       const result = await persistBoat(boat)
       if (result === "created") stats.created++

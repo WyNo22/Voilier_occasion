@@ -1,6 +1,6 @@
 import * as cheerio from "cheerio"
 import type { RawListingInput } from "@voilierscope/core"
-import type { SearchQuery } from "@voilierscope/types"
+import type { SearchQuery, VehicleCategory } from "@voilierscope/types"
 import type { ConnectorContext, ConnectorHealth, RawDocument, SourceConnector, SourceRef } from "./types"
 import { extractFromHtml } from "./extract-jsonld"
 
@@ -23,6 +23,8 @@ export interface JsonLdConnectorConfig {
   listingLinkSelector?: string
   /** Nombre maximum d'annonces récupérées par recherche (politesse). */
   maxListings?: number
+  /** Catégorie de véhicule par défaut des annonces de cette source. */
+  category?: VehicleCategory
   /** Extrait l'identifiant externe depuis une URL d'annonce. */
   externalIdFromUrl?: (url: string) => string
   /**
@@ -89,7 +91,16 @@ export class JsonLdConnector implements SourceConnector {
           $(this.config.listingLinkSelector).each((_, el) => {
             const href = $(el).attr("href")
             if (!href) return
-            urls.add(new URL(href, this.baseUrl).toString())
+            let abs: URL
+            try {
+              abs = new URL(href, this.baseUrl)
+            } catch {
+              return
+            }
+            abs.hash = "" // ignore les ancres (#gallery, #contact…)
+            const clean = abs.toString()
+            if (this.config.listingUrlPattern && !this.config.listingUrlPattern.test(clean)) return
+            urls.add(clean)
           })
           await new Promise((r) => setTimeout(r, ctx.politeDelayMs))
         } catch (err) {
@@ -132,6 +143,7 @@ export class JsonLdConnector implements SourceConnector {
       source: doc.source,
       externalId: doc.externalId,
       url: doc.url,
+      category: this.config.category,
       title,
       price: pick(custom.price, data.price),
       currency: pick(custom.currency, data.currency),
@@ -146,7 +158,7 @@ export class JsonLdConnector implements SourceConnector {
       description: pick(custom.description, data.description),
       photos: custom.photos ?? data.photos ?? [],
       equipment: pick(custom.equipment, data.equipment),
-      engineBrand: custom.engineBrand,
+      engineBrand: pick(custom.engineBrand, data.engineBrand),
       enginePower: custom.enginePower,
       engineHours: custom.engineHours,
       cabins: custom.cabins,
